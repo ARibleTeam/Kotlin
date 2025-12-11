@@ -7,7 +7,7 @@
     android:orientation="vertical"
     tools:context=".SearchActivity">
 
-    <!-- Заголовок -->
+    <!-- Заголовок (без изменений) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -29,7 +29,7 @@
             android:text="@string/search" />
     </LinearLayout>
 
-    <!-- Поле поиска -->
+    <!-- Поле поиска (без изменений) -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="48dp"
@@ -50,7 +50,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- RecyclerView для результатов поиска -->
+        <!-- RecyclerView для результатов поиска (без изменений) -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/track_recycler_view"
             android:layout_width="match_parent"
@@ -60,7 +60,7 @@
             tools:itemCount="5"
             tools:listitem="@layout/track_view" />
 
-        <!-- Блок истории поиска -->
+        <!-- Блок истории поиска (без изменений) -->
         <LinearLayout
             android:id="@+id/search_history_view"
             android:layout_width="match_parent"
@@ -91,55 +91,37 @@
         <!-- Плейсхолдер "Ничего не нашлось" -->
         <LinearLayout
             android:id="@+id/nothing_found_placeholder"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="102dp"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:visibility="gone">
+            style="@style/SearchPlaceholder"
+            tools:visibility="gone">
 
             <ImageView
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:src="@drawable/ic_nothing_found" />
+                style="@style/SearchPlaceholder.Icon"
+                android:src="@drawable/ic_nothing_found"
+                android:contentDescription="@string/nothing_found"/>
 
             <TextView
-                style="@style/SearchHistoryHeader"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                style="@style/SearchPlaceholder.Title"
                 android:text="@string/nothing_found" />
         </LinearLayout>
 
         <!-- Плейсхолдер "Проблемы со связью" -->
         <LinearLayout
             android:id="@+id/connection_error_placeholder"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="102dp"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:visibility="gone">
+            style="@style/SearchPlaceholder"
+            tools:visibility="gone">
 
             <ImageView
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:src="@drawable/ic_connection_error" />
+                style="@style/SearchPlaceholder.Icon"
+                android:src="@drawable/ic_connection_error"
+                android:contentDescription="@string/connection_problems"/>
 
             <TextView
-                style="@style/SearchHistoryHeader"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
+                style="@style/SearchPlaceholder.Title"
                 android:text="@string/connection_problems" />
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:gravity="center"
-                android:text="@string/connection_problems_message"
-                android:textColor="?attr/colorControlNormal" />
+                style="@style/SearchPlaceholder.Message"
+                android:text="@string/connection_problems_message" />
 
             <Button
                 android:id="@+id/update_button"
@@ -153,11 +135,8 @@
         <!-- Прогресс-бар -->
         <ProgressBar
             android:id="@+id/progress_bar"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:layout_gravity="center"
-            android:indeterminateTint="@color/yp_blue"
-            android:visibility="gone" />
+            style="@style/SearchProgressBar"
+            tools:visibility="gone"/>
 
     </FrameLayout>
 
