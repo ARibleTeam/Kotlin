@@ -46,44 +46,119 @@
             android:contentDescription="@string/clear_search_query" />
     </FrameLayout>
 
-    <!-- RecyclerView для результатов поиска -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/track_recycler_view"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="24dp"
-        android:layout_weight="1"
-        android:visibility="gone"
-        tools:itemCount="5"
-        tools:listitem="@layout/track_view" />
+        android:layout_height="match_parent">
 
-    <!-- Блок истории поиска -->
-    <LinearLayout
-        android:id="@+id/search_history_view"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="24dp"
-        android:layout_weight="1"
-        android:gravity="top|center_horizontal"
-        android:orientation="vertical"
-        android:visibility="gone"
-        tools:visibility="visible">
-
-        <TextView
-            style="@style/SearchHistoryHeader"
-            android:text="Вы искали" />
-
+        <!-- RecyclerView для результатов поиска -->
         <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/history_recycler_view"
+            android:id="@+id/track_recycler_view"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            tools:itemCount="3"
+            android:layout_height="match_parent"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            tools:itemCount="5"
             tools:listitem="@layout/track_view" />
 
-        <Button
-            android:id="@+id/clear_history_button"
-            style="@style/SearchHistoryClearButton" />
-    </LinearLayout>
+        <!-- Блок истории поиска -->
+        <LinearLayout
+            android:id="@+id/search_history_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="top|center_horizontal"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                style="@style/SearchHistoryHeader"
+                android:text="Вы искали" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/history_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                tools:itemCount="3"
+                tools:listitem="@layout/track_view" />
+
+            <Button
+                android:id="@+id/clear_history_button"
+                style="@style/SearchHistoryClearButton" />
+        </LinearLayout>
+
+        <!-- Плейсхолдер "Ничего не нашлось" -->
+        <LinearLayout
+            android:id="@+id/nothing_found_placeholder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="102dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:src="@drawable/ic_nothing_found" />
+
+            <TextView
+                style="@style/SearchHistoryHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/nothing_found" />
+        </LinearLayout>
+
+        <!-- Плейсхолдер "Проблемы со связью" -->
+        <LinearLayout
+            android:id="@+id/connection_error_placeholder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="102dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:src="@drawable/ic_connection_error" />
+
+            <TextView
+                style="@style/SearchHistoryHeader"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/connection_problems" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:gravity="center"
+                android:text="@string/connection_problems_message"
+                android:textColor="?attr/colorControlNormal" />
+
+            <Button
+                android:id="@+id/update_button"
+                style="@style/SearchHistoryClearButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/update" />
+        </LinearLayout>
+
+        <!-- Прогресс-бар -->
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="center"
+            android:indeterminateTint="@color/yp_blue"
+            android:visibility="gone" />
+
+    </FrameLayout>
 
 </LinearLayout>

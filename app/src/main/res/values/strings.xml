@@ -17,4 +17,9 @@
     <string name="support_body">Работает!!</string>
     <string name="agreement_url">https://vivt.ru/</string>
     <string name="clear_search_query">Очистить поисковый запрос</string>
+
+    <string name="nothing_found">Ничего не нашлось</string>
+    <string name="connection_problems">Проблемы со связью</string>
+    <string name="connection_problems_message">Загрузка не удалась. Проверьте подключение к интернету</string>
+    <string name="update">Обновить</string>
 </resources>
