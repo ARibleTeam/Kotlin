@@ -9,7 +9,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 
-class TrackAdapter(private val onTrackClick: (Track) -> Unit) : RecyclerView.Adapter<TrackAdapter.TrackViewHolder>() {
+class TrackAdapter(
+    private val onTrackClick: (Track) -> Unit
+) : RecyclerView.Adapter<TrackAdapter.TrackViewHolder>() {
 
     var tracks = ArrayList<Track>()
 

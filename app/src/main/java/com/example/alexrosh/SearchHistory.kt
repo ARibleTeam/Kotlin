@@ -13,7 +13,6 @@ class SearchHistory(private val sharedPreferences: SharedPreferences) {
 
     fun read(): ArrayList<Track> {
         val json = sharedPreferences.getString(HISTORY_KEY, null) ?: return ArrayList()
-        // Важно: toCollection(ArrayList()) для создания изменяемого списка
         return gson.fromJson(json, Array<Track>::class.java).toCollection(ArrayList())
     }
 
@@ -29,7 +28,7 @@ class SearchHistory(private val sharedPreferences: SharedPreferences) {
         history.removeIf { it.trackId == track.trackId }
         history.add(0, track)
         if (history.size > MAX_HISTORY_SIZE) {
-            history.removeLast()
+            history.removeAt(history.size - 1)
         }
         write(history)
     }

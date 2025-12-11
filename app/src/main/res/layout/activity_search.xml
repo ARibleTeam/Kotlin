@@ -55,6 +55,7 @@
         android:layout_marginTop="24dp"
         android:layout_weight="1"
         android:visibility="gone"
+        tools:itemCount="5"
         tools:listitem="@layout/track_view" />
 
     <!-- Блок истории поиска -->
@@ -70,13 +71,8 @@
         tools:visibility="visible">
 
         <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="Вы искали"
-            android:textColor="@color/yp_text_primary"
-            android:textSize="19sp"
-            app:fontFamily="@font/ys_display_medium" />
+            style="@style/SearchHistoryHeader"
+            android:text="Вы искали" />
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/history_recycler_view"
@@ -84,19 +80,12 @@
             android:layout_height="0dp"
             android:layout_marginTop="20dp"
             android:layout_weight="1"
+            tools:itemCount="3"
             tools:listitem="@layout/track_view" />
 
         <Button
             android:id="@+id/clear_history_button"
-            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:backgroundTint="@color/yp_text_primary"
-            android:text="Очистить историю"
-            android:textColor="@color/yp_background_secondary"
-            android:textAllCaps="false"
-            app:cornerRadius="24dp" />
+            style="@style/SearchHistoryClearButton" />
     </LinearLayout>
 
 </LinearLayout>

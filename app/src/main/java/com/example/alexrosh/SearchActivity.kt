@@ -20,8 +20,6 @@ class SearchActivity : AppCompatActivity() {
     private var currentSearchQuery: String = ""
 
     private lateinit var searchEditText: EditText
-    private lateinit var clearIcon: ImageView
-    private lateinit var backButton: ImageView
 
     // Результаты поиска
     private val mockTracks = ArrayList<Track>()
@@ -39,10 +37,10 @@ class SearchActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_search)
 
-        // Инициализация всех View
+        // Инициализация View
         searchEditText = findViewById(R.id.search_edit_text)
-        clearIcon = findViewById(R.id.clear_icon)
-        backButton = findViewById(R.id.back_button)
+        val clearIcon = findViewById<ImageView>(R.id.clear_icon)
+        val backButton = findViewById<ImageView>(R.id.back_button)
         historyView = findViewById(R.id.search_history_view)
         clearHistoryButton = findViewById(R.id.clear_history_button)
         resultsRecyclerView = findViewById(R.id.track_recycler_view)
@@ -66,7 +64,7 @@ class SearchActivity : AppCompatActivity() {
         }
         resultsRecyclerView.layoutManager = LinearLayoutManager(this)
         resultsRecyclerView.adapter = resultsAdapter
-        fillMockTracks() // Метод теперь вызывается
+        fillMockTracks()
         resultsAdapter.tracks = mockTracks
 
         // --- Слушатели ---
@@ -74,8 +72,7 @@ class SearchActivity : AppCompatActivity() {
 
         clearIcon.setOnClickListener {
             searchEditText.setText("")
-            hideKeyboard(it) // Метод теперь вызывается
-            resultsRecyclerView.visibility = View.GONE
+            hideKeyboard(it)
         }
 
         clearHistoryButton.setOnClickListener {
@@ -86,35 +83,23 @@ class SearchActivity : AppCompatActivity() {
         }
 
         searchEditText.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus && searchEditText.text.isEmpty() && historyAdapter.tracks.isNotEmpty()) {
-                showHistoryView()
-            } else {
-                hideHistoryView()
-            }
+            showOrHideHistory(hasFocus, searchEditText.text)
         }
 
         val simpleTextWatcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 currentSearchQuery = s.toString()
-                clearIcon.visibility = clearButtonVisibility(s) // Метод теперь вызывается
-
-                if (searchEditText.hasFocus() && s?.isEmpty() == true && historyAdapter.tracks.isNotEmpty()) {
-                    showHistoryView()
-                    resultsRecyclerView.visibility = View.GONE
-                } else {
-                    hideHistoryView()
-                    resultsRecyclerView.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
-                }
+                clearIcon.visibility = clearButtonVisibility(s)
+                showOrHideHistory(searchEditText.hasFocus(), s)
+                resultsRecyclerView.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
             }
             override fun afterTextChanged(s: Editable?) {}
         }
         searchEditText.addTextChangedListener(simpleTextWatcher)
 
-        // Начальное состояние при открытии экрана
-        if (historyAdapter.tracks.isNotEmpty()) {
-            showHistoryView()
-        }
+        // Начальное состояние
+        showOrHideHistory(searchEditText.hasFocus(), searchEditText.text)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -128,6 +113,11 @@ class SearchActivity : AppCompatActivity() {
         searchEditText.setText(currentSearchQuery)
     }
 
+    private fun showOrHideHistory(hasFocus: Boolean, text: CharSequence?) {
+        val shouldShowHistory = hasFocus && text.isNullOrEmpty() && historyAdapter.tracks.isNotEmpty()
+        historyView.visibility = if (shouldShowHistory) View.VISIBLE else View.GONE
+    }
+
     private fun showHistoryView() {
         resultsRecyclerView.visibility = View.GONE
         historyView.visibility = View.VISIBLE
@@ -138,11 +128,7 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun clearButtonVisibility(s: CharSequence?): Int {
-        return if (s.isNullOrEmpty()) {
-            View.GONE
-        } else {
-            View.VISIBLE
-        }
+        return if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
     }
 
     private fun hideKeyboard(view: View) {
@@ -152,22 +138,11 @@ class SearchActivity : AppCompatActivity() {
 
     private fun fillMockTracks() {
         mockTracks.clear()
-        // ИСПРАВЛЕНО: Конструкторы Track теперь вызываются правильно
-        mockTracks.add(
-            Track(1L, "Smells Like Teen Spirit", "Nirvana", "5:01", "https://is5-ssl.mzstatic.com/image/thumb/Music115/v4/7b/58/c2/7b58c21a-2b51-2bb2-e59a-9bb9b96ad8c3/00602567924166.rgb.jpg/100x100bb.jpg")
-        )
-        mockTracks.add(
-            Track(2L, "Billie Jean", "Michael Jackson", "4:35", "https://is5-ssl.mzstatic.com/image/thumb/Music125/v4/3d/9d/38/3d9d3811-71f0-3a0e-1ada-3004e56ff852/827969428726.jpg/100x100bb.jpg")
-        )
-        mockTracks.add(
-            Track(3L, "Stayin' Alive", "Bee Gees", "4:10", "https://is4-ssl.mzstatic.com/image/thumb/Music115/v4/1f/80/1f/1f801fc1-8c0f-ea3e-d3e5-387c6619619e/16UMGIM86640.rgb.jpg/100x100bb.jpg")
-        )
-        mockTracks.add(
-            Track(4L, "Whole Lotta Love", "Led Zeppelin", "5:33", "https://is2-ssl.mzstatic.com/image/thumb/Music62/v4/7e/17/e3/7e17e33f-2efa-2a36-e916-7f808576cf6b/mzm.fyigqcbs.jpg/100x100bb.jpg")
-        )
-        mockTracks.add(
-            Track(5L, "Sweet Child O'Mine", "Guns N' Roses", "5:03", "https://is5-ssl.mzstatic.com/image/thumb/Music125/v4/a0/4d/c4/a04dc484-03cc-02aa-fa82-5334fcb4bc16/18UMGIM24878.rgb.jpg/100x100bb.jpg")
-        )
+        mockTracks.add(Track(1L, "Smells Like Teen Spirit", "Nirvana", "5:01", "https://is5-ssl.mzstatic.com/image/thumb/Music115/v4/7b/58/c2/7b58c21a-2b51-2bb2-e59a-9bb9b96ad8c3/00602567924166.rgb.jpg/100x100bb.jpg"))
+        mockTracks.add(Track(2L, "Billie Jean", "Michael Jackson", "4:35", "https://is5-ssl.mzstatic.com/image/thumb/Music125/v4/3d/9d/38/3d9d3811-71f0-3a0e-1ada-3004e56ff852/827969428726.jpg/100x100bb.jpg"))
+        mockTracks.add(Track(3L, "Stayin' Alive", "Bee Gees", "4:10", "https://is4-ssl.mzstatic.com/image/thumb/Music115/v4/1f/80/1f/1f801fc1-8c0f-ea3e-d3e5-387c6619619e/16UMGIM86640.rgb.jpg/100x100bb.jpg"))
+        mockTracks.add(Track(4L, "Whole Lotta Love", "Led Zeppelin", "5:33", "https://is2-ssl.mzstatic.com/image/thumb/Music62/v4/7e/17/e3/7e17e33f-2efa-2a36-e916-7f808576cf6b/mzm.fyigqcbs.jpg/100x100bb.jpg"))
+        mockTracks.add(Track(5L, "Sweet Child O'Mine", "Guns N' Roses", "5:03", "https://is5-ssl.mzstatic.com/image/thumb/Music125/v4/a0/4d/c4/a04dc484-03cc-02aa-fa82-5334fcb4bc16/18UMGIM24878.rgb.jpg/100x100bb.jpg"))
     }
 
     companion object {
