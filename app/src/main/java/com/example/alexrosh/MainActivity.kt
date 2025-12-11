@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -21,10 +22,24 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        val searchBtn = findViewById<LinearLayout>(R.id.search_btn)
+        val libraryBtn = findViewById<LinearLayout>(R.id.library_btn)
         val settingBtn = findViewById<LinearLayout>(R.id.settings_btn)
+
+        // Обработчик для кнопки "Поиск" (лямбда)
+        searchBtn.setOnClickListener {
+            Toast.makeText(this@MainActivity, "Нажата кнопка Поиск!", Toast.LENGTH_SHORT).show()
+        }
+
+        // Обработчик для кнопки "Медиатека" (лямбда)
+        libraryBtn.setOnClickListener {
+            Toast.makeText(this@MainActivity, "Нажата кнопка Медиатека!", Toast.LENGTH_SHORT).show()
+        }
+
+        // Обработчик для кнопки "Настройки" (остался без изменений)
         settingBtn.setOnClickListener {
-            intent = Intent(this, SettingsActivity::class.java)
-            startActivity(intent)
+            val settingsIntent = Intent(this, SettingsActivity::class.java)
+            startActivity(settingsIntent)
         }
     }
 }
