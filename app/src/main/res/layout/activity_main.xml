@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
@@ -10,10 +9,10 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@color/yp_blue"
-        android:orientation="vertical"
-        >
+        android:background="@color/yp_background_main"
+        android:orientation="vertical">
 
+        <!-- Контейнер для заголовка с правильными отступами -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -22,102 +21,62 @@
             android:paddingVertical="16dp">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                style="@style/MainScreenHeader"
                 android:layout_gravity="start"
-                android:text="@string/main_title"
-                android:textColor="@color/white"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-
+                android:text="@string/main_title" />
         </LinearLayout>
 
+        <!-- Контейнер для кнопок с правильными отступами -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
             android:paddingHorizontal="20dp"
-            android:paddingVertical="16dp"
-            >
-
+            android:paddingVertical="16dp">
 
             <LinearLayout
                 android:id="@+id/search_btn"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_weight="1"
-                android:background="@drawable/white_rounded_background"
-                android:gravity="center"
-                android:orientation="horizontal">
+                style="@style/MainScreenButton">
 
                 <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
+                    style="@style/MainScreenButtonIcon"
                     android:src="@drawable/ic_search"
                     android:contentDescription="@string/search"/>
 
                 <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/search"
-                    android:textColor="@color/yp_black"
-                    android:textStyle="bold"
-                    android:textSize="22sp" />
+                    style="@style/MainScreenButtonText"
+                    android:text="@string/search" />
             </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/library_btn"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_marginTop="16dp"
-                android:layout_weight="1"
-                android:background="@drawable/white_rounded_background"
-                android:gravity="center"
-                android:orientation="horizontal">
+                style="@style/MainScreenButton"
+                android:layout_marginTop="16dp">
 
                 <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
+                    style="@style/MainScreenButtonIcon"
                     android:src="@drawable/ic_library"
                     android:contentDescription="@string/library"/>
 
                 <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/library"
-                    android:textColor="@color/yp_black"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
+                    style="@style/MainScreenButtonText"
+                    android:text="@string/library" />
             </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/settings_btn"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_marginTop="16dp"
-                android:layout_weight="1"
-                android:background="@drawable/white_rounded_background"
-                android:gravity="center"
-                android:orientation="horizontal">
+                style="@style/MainScreenButton"
+                android:layout_marginTop="16dp">
 
                 <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
+                    style="@style/MainScreenButtonIcon"
                     android:src="@drawable/ic_settings"
                     android:contentDescription="@string/main_settings"/>
 
                 <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="@string/main_settings"
-                    android:textColor="@color/yp_black"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
+                    style="@style/MainScreenButtonText"
+                    android:text="@string/main_settings" />
             </LinearLayout>
-
         </LinearLayout>
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

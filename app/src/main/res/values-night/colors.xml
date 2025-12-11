@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Тематические цвета для тёмной темы -->
+    <color name="yp_background_main">@color/black</color>
+    <color name="yp_background_secondary">@color/white</color>
+    <color name="yp_text_primary">@color/white</color>
+    <color name="yp_text_on_dark_background">@color/white</color>
+    <color name="yp_icon_primary">@color/white</color>
+</resources>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Стили для Главного Экрана -->
+
+    <style name="MainScreenHeader">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/yp_text_on_dark_background</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <style name="MainScreenButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:background">@drawable/white_rounded_background</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">horizontal</item>
+    </style>
+
+    <!-- ИЗМЕНЕНО: Имя стиля без точки -->
+    <style name="MainScreenButtonText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textColor">@color/black</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <!-- ИЗМЕНЕНО: Имя стиля без точки -->
+    <style name="MainScreenButtonIcon">
+        <item name="android:layout_width">24dp</item>
+        <item name="android:layout_height">24dp</item>
+    </style>
+
+    <!-- Стили для Экрана Настроек -->
+
+    <style name="SettingsScreenHeader">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">28dp</item>
+        <item name="android:textColor">@color/yp_text_primary</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <style name="SettingsScreenMenuItem">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">61dp</item>
+    </style>
+
+    <!-- ИЗМЕНЕНО: Имя стиля без точки -->
+    <style name="SettingsMenuItemText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_gravity">center_vertical|start</item>
+        <item name="android:textColor">@color/yp_text_primary</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:fontFamily">@font/ys_display_regular</item>
+    </style>
+
+    <!-- ИЗМЕНЕНО: Имя стиля без точки -->
+    <style name="SettingsMenuItemIcon">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">20dp</item>
+        <item name="android:layout_gravity">center_vertical|end</item>
+    </style>
+
+</resources>
