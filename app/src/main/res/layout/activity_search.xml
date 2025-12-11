@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/yp_background_secondary"
     android:orientation="vertical"
-    android:paddingHorizontal="16dp"
     tools:context=".SearchActivity">
 
     <!-- Заголовок -->
@@ -14,7 +14,9 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingVertical="14dp">
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
 
         <ImageView
             android:id="@+id/back_button"
@@ -32,6 +34,7 @@
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="48dp"
+        android:layout_marginHorizontal="16dp"
         android:layout_marginTop="8dp">
 
         <EditText
@@ -44,10 +47,56 @@
             android:contentDescription="@string/clear_search_query" />
     </FrameLayout>
 
+    <!-- RecyclerView для результатов поиска -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/track_recycler_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginTop="24dp" />
+        android:layout_height="0dp"
+        android:layout_marginTop="24dp"
+        android:layout_weight="1"
+        android:visibility="gone"
+        tools:listitem="@layout/track_view" />
+
+    <!-- Блок истории поиска -->
+    <LinearLayout
+        android:id="@+id/search_history_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="24dp"
+        android:layout_weight="1"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="Вы искали"
+            android:textColor="@color/yp_text_primary"
+            android:textSize="19sp"
+            app:fontFamily="@font/ys_display_medium" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/history_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="20dp"
+            android:layout_weight="1"
+            tools:listitem="@layout/track_view" />
+
+        <Button
+            android:id="@+id/clear_history_button"
+            style="@style/Widget.MaterialComponents.Button.UnelevatedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:backgroundTint="@color/yp_text_primary"
+            android:text="Очистить историю"
+            android:textColor="@color/yp_background_secondary"
+            android:textAllCaps="false"
+            app:cornerRadius="24dp" />
+    </LinearLayout>
 
 </LinearLayout>
