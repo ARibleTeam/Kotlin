@@ -10,4 +10,11 @@
     <string name="search">Поиск</string>
     <string name="library">Медиатека</string>
     <string name="main_settings">Настройка</string>
+
+    <string name="share_message">Я использую приложение Рощупкина Алексея ИС-221</string>
+    <string name="support_email">AlexseyRoshupkin@yandex.ru</string>
+    <string name="support_subject">Сообщение разработчикам Playlist Maker</string>
+    <string name="support_body">Работает!!</string>
+    <string name="agreement_url">https://vivt.ru/</string>
+    <string name="clear_search_query">Очистить поисковый запрос</string>
 </resources>

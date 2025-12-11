@@ -1,9 +1,10 @@
 package com.example.alexrosh
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.switchmaterial.SwitchMaterial
 
@@ -14,11 +15,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // --- Логика переключателя темы ---
         val themeSwitcher = findViewById<SwitchMaterial>(R.id.theme_switch)
-
-        // Устанавливаем текущее состояние свитчера
         themeSwitcher.isChecked = (applicationContext as App).darkTheme
-
-        // Вешаем слушатель на изменение состояния
         themeSwitcher.setOnCheckedChangeListener { _, checked ->
             (applicationContext as App).switchTheme(checked)
         }
@@ -29,19 +26,32 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         }
 
+        // Кнопка "Поделиться"
         val shareBtn = findViewById<FrameLayout>(R.id.share_btn)
         shareBtn.setOnClickListener {
-            Toast.makeText(this, "Поделиться", Toast.LENGTH_SHORT).show()
+            val shareIntent = Intent(Intent.ACTION_SEND)
+            shareIntent.type = "text/plain"
+            shareIntent.putExtra(Intent.EXTRA_TEXT, getString(R.string.share_message))
+            startActivity(Intent.createChooser(shareIntent, "Поделиться"))
         }
 
+        // Кнопка "Поддержка"
         val supportBtn = findViewById<FrameLayout>(R.id.support_btn)
         supportBtn.setOnClickListener {
-            Toast.makeText(this, "Поддержка", Toast.LENGTH_SHORT).show()
+            val supportIntent = Intent(Intent.ACTION_SENDTO)
+            supportIntent.data = Uri.parse("mailto:")
+            supportIntent.putExtra(Intent.EXTRA_EMAIL, arrayOf(getString(R.string.support_email)))
+            supportIntent.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.support_subject))
+            supportIntent.putExtra(Intent.EXTRA_TEXT, getString(R.string.support_body))
+            startActivity(supportIntent)
         }
 
+        // Кнопка "Соглашение"
         val agreementBtn = findViewById<FrameLayout>(R.id.agreement_btn)
         agreementBtn.setOnClickListener {
-            Toast.makeText(this, "Соглашение", Toast.LENGTH_SHORT).show()
+            val agreementIntent = Intent(Intent.ACTION_VIEW)
+            agreementIntent.data = Uri.parse(getString(R.string.agreement_url))
+            startActivity(agreementIntent)
         }
     }
 }
