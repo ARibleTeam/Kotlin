@@ -5,149 +5,133 @@
     android:id="@+id/settings"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:paddingHorizontal="16dp"
-    tools:context=".MainActivity">
+    tools:context=".SettingsActivity">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#ffffff"
+        android:background="@color/white"
         android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         >
 
+        <!-- Header -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:gravity="start"
-            android:paddingVertical="16dp">
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp">
 
             <ImageView
+                android:id="@+id/back_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:src="@drawable/back_lm" />
+                android:src="@drawable/ic_arrow_back"
+                android:contentDescription="@string/back_button_description"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Настройки"
-                android:layout_gravity="center"
-                android:textColor="#000000"
+                android:layout_marginStart="28dp"
+                android:text="@string/settings_title"
+                android:textColor="@color/yp_black"
                 android:textSize="22sp"
-                android:paddingLeft="10sp"
                 android:textStyle="bold" />
 
         </LinearLayout>
 
-        <LinearLayout
+        <!-- Dark Theme -->
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:layout_gravity="top"
-            >
+            android:layout_height="61dp">
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|start"
+                android:text="@string/dark_theme"
+                android:textColor="@color/yp_black"
+                android:textSize="16sp"/>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="61dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/theme_switch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|end"
+                />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Темная тема"
-                    android:textColor="#1A1B22"
-                    android:textSize="18sp"/>
+        </FrameLayout>
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
-                </Space>
+        <!-- Share App -->
+        <FrameLayout
+            android:id="@+id/share_btn"
+            android:layout_width="match_parent"
+            android:layout_height="61dp">
 
-                <ImageView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:src="@drawable/control_theme_lm" />
-            </LinearLayout>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|start"
+                android:text="@string/share_app"
+                android:textColor="@color/yp_black"
+                android:textSize="16sp"/>
 
-            <LinearLayout
-                android:id="@+id/share_btn"
-                android:layout_width="match_parent"
-                android:layout_height="61dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center_vertical|end"
+                android:src="@drawable/ic_share"
+                android:contentDescription="@null" />
+        </FrameLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Поделиться приложением"
-                    android:textColor="#1A1B22"
-                    android:textSize="18sp"/>
+        <!-- Write to Support -->
+        <FrameLayout
+            android:id="@+id/support_btn"
+            android:layout_width="match_parent"
+            android:layout_height="61dp">
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
-                </Space>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|start"
+                android:text="@string/write_to_support"
+                android:textColor="@color/yp_black"
+                android:textSize="16sp"/>
 
-                <ImageView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:src="@drawable/share_lm" />
-            </LinearLayout>
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center_vertical|end"
+                android:src="@drawable/ic_support"
+                android:contentDescription="@null"/>
+        </FrameLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="61dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+        <!-- User Agreement -->
+        <FrameLayout
+            android:id="@+id/agreement_btn"
+            android:layout_width="match_parent"
+            android:layout_height="61dp">
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Написать в поддержку"
-                    android:textColor="#1A1B22"
-                    android:textSize="18sp"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|start"
+                android:text="@string/user_agreement"
+                android:textColor="@color/yp_black"
+                android:textSize="16sp"/>
 
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
-                </Space>
+            <ImageView
+                android:layout_width="19dp"
+                android:layout_height="19dp"
+                android:layout_gravity="center_vertical|end"
+                android:src="@drawable/ic_arrow_forward"
+                android:contentDescription="@null"/>
+        </FrameLayout>
 
-                <ImageView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:src="@drawable/group" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="61dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Пользовательское соглашение"
-                    android:textColor="#1A1B22"
-                    android:textSize="18sp"/>
-
-                <Space
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1">
-                </Space>
-
-                <ImageView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:src="@drawable/agreement" />
-            </LinearLayout>
-
-        </LinearLayout>
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

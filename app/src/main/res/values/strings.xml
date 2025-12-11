@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">AlexRosh</string>
+    <string name="settings_title">Настройки</string>
+    <string name="dark_theme">Темная тема</string>
+    <string name="share_app">Поделиться приложением</string>
+    <string name="write_to_support">Написать в поддержку</string>
+    <string name="user_agreement">Пользовательское соглашение</string>
+    <string name="back_button_description">Назад</string>
+    <string name="main_title">Playlist maker</string>
+    <string name="search">Поиск</string>
+    <string name="library">Медиатека</string>
+    <string name="main_settings">Настройка</string>
 </resources>

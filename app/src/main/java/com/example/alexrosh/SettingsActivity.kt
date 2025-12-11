@@ -1,7 +1,8 @@
 package com.example.alexrosh
 
 import android.os.Bundle
-import android.widget.LinearLayout
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -19,10 +20,27 @@ class SettingsActivity : AppCompatActivity() {
             insets
         }
 
-        val shareBtn = findViewById<LinearLayout>(R.id.share_btn)
+        val backButton = findViewById<ImageView>(R.id.back_button)
+        backButton.setOnClickListener {
+            finish()
+        }
+
+        // Обновляем тип на FrameLayout
+        val shareBtn = findViewById<FrameLayout>(R.id.share_btn)
         shareBtn.setOnClickListener {
-            Toast.makeText(this@SettingsActivity, "djkhsdfjkh", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Поделиться", Toast.LENGTH_SHORT).show()
+        }
+
+        // Добавляем обработчик для кнопки "Поддержка"
+        val supportBtn = findViewById<FrameLayout>(R.id.support_btn)
+        supportBtn.setOnClickListener {
+            Toast.makeText(this, "Поддержка", Toast.LENGTH_SHORT).show()
+        }
+
+        // Добавляем обработчик для кнопки "Соглашение"
+        val agreementBtn = findViewById<FrameLayout>(R.id.agreement_btn)
+        agreementBtn.setOnClickListener {
+            Toast.makeText(this, "Соглашение", Toast.LENGTH_SHORT).show()
         }
     }
-
 }

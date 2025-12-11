@@ -10,7 +10,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#3772E7"
+        android:background="@color/yp_blue"
         android:orientation="vertical"
         >
 
@@ -25,8 +25,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="start"
-                android:text="Playlist maker"
-                android:textColor="#ffffff"
+                android:text="@string/main_title"
+                android:textColor="@color/white"
                 android:textSize="22sp"
                 android:textStyle="bold" />
 
@@ -50,16 +50,17 @@
                 android:orientation="horizontal">
 
                 <ImageView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:src="@drawable/search_lm" />
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_search"
+                    android:contentDescription="@string/search"/>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="Поиск"
-                    android:textColor="#1A1B22"
+                    android:text="@string/search"
+                    android:textColor="@color/yp_black"
                     android:textStyle="bold"
                     android:textSize="22sp" />
             </LinearLayout>
@@ -74,16 +75,17 @@
                 android:orientation="horizontal">
 
                 <ImageView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:src="@drawable/library_lm" />
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_library"
+                    android:contentDescription="@string/library"/>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="Медиатека"
-                    android:textColor="#1A1B22"
+                    android:text="@string/library"
+                    android:textColor="@color/yp_black"
                     android:textSize="22sp"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -99,16 +101,17 @@
                 android:orientation="horizontal">
 
                 <ImageView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:src="@drawable/settings_lm" />
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_settings"
+                    android:contentDescription="@string/main_settings"/>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="Настройка"
-                    android:textColor="#1A1B22"
+                    android:text="@string/main_settings"
+                    android:textColor="@color/yp_black"
                     android:textSize="22sp"
                     android:textStyle="bold" />
             </LinearLayout>
