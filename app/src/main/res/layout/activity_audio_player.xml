@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/yp_background_secondary"
     tools:context=".AudioPlayerActivity">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
 
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/start_guideline"
@@ -73,15 +77,15 @@
 
     <ImageButton
         android:id="@+id/add_to_playlist_button"
-        android:layout_width="@dimen/audio_player_control_button_size"
-        android:layout_height="@dimen/audio_player_control_button_size"
+        android:layout_width="@dimen/audio_player_side_button_size"
+        android:layout_height="@dimen/audio_player_side_button_size"
+        android:layout_marginEnd="@dimen/audio_player_controls_inner_spacing"
         android:background="@drawable/round_button_secondary"
         android:contentDescription="@string/audio_player_add_to_playlist_icon_description"
         android:scaleType="centerInside"
         android:stateListAnimator="@null"
         app:layout_constraintBottom_toBottomOf="@id/play_button"
         app:layout_constraintEnd_toStartOf="@id/play_button"
-        app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintHorizontal_chainStyle="spread"
         app:layout_constraintStart_toStartOf="@id/start_guideline"
         app:layout_constraintTop_toTopOf="@id/play_button"
@@ -89,8 +93,8 @@
 
     <ImageButton
         android:id="@+id/play_button"
-        android:layout_width="@dimen/audio_player_control_button_size"
-        android:layout_height="@dimen/audio_player_control_button_size"
+        android:layout_width="@dimen/audio_player_play_button_size"
+        android:layout_height="@dimen/audio_player_play_button_size"
         android:layout_marginTop="24dp"
         android:background="@drawable/round_button_primary"
         android:contentDescription="@string/audio_player_play_icon_description"
@@ -103,8 +107,9 @@
 
     <ImageButton
         android:id="@+id/like_button"
-        android:layout_width="@dimen/audio_player_control_button_size"
-        android:layout_height="@dimen/audio_player_control_button_size"
+        android:layout_width="@dimen/audio_player_side_button_size"
+        android:layout_height="@dimen/audio_player_side_button_size"
+        android:layout_marginStart="@dimen/audio_player_controls_inner_spacing"
         android:background="@drawable/round_button_secondary"
         android:contentDescription="@string/audio_player_like_icon_description"
         android:scaleType="centerInside"
@@ -113,7 +118,6 @@
         app:layout_constraintEnd_toEndOf="@id/end_guideline"
         app:layout_constraintStart_toEndOf="@id/play_button"
         app:layout_constraintTop_toTopOf="@id/play_button"
-        app:layout_constraintVertical_bias="1.0"
         tools:src="@drawable/ic_like" />
 
     <TextView
@@ -254,4 +258,54 @@
         app:layout_constraintStart_toStartOf="@id/start_guideline"
         tools:text="Nevermind" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <LinearLayout
+        android:id="@+id/playlist_bottom_sheet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bottom_sheet_bg"
+        android:elevation="8dp"
+        android:orientation="vertical"
+        app:behavior_hideable="true"
+        app:behavior_peekHeight="@dimen/playlist_bottom_sheet_peek_height"
+        app:layout_behavior="@string/bottom_sheet_behavior">
+
+        <View
+            android:layout_width="40dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:background="@color/yp_gray" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="@string/audio_player_bottom_sheet_title"
+            android:textColor="@color/yp_text_primary"
+            android:textSize="19sp"
+            app:fontFamily="@font/ys_display_medium" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/new_playlist_button"
+            style="@style/SearchHistoryClearButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/library_new_playlist" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/playlists_bottom_sheet_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="300dp"
+            android:layout_marginTop="8dp"
+            tools:itemCount="4"
+            tools:listitem="@layout/playlist_bottom_sheet_item" />
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

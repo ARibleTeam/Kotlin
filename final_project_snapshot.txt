@@ -1,0 +1,3667 @@
+﻿
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\App.kt ---
+
+package com.example.alexrosh
+
+import android.app.Application
+import androidx.appcompat.app.AppCompatDelegate
+import android.content.SharedPreferences
+import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+
+const val THEME_PREFS = "theme_prefs"
+const val DARK_THEME_KEY = "dark_theme_key"
+
+class App : Application() {
+
+    var darkTheme = false
+    private lateinit var sharedPrefs: SharedPreferences
+    lateinit var database: AppDatabase
+        private set
+
+    override fun onCreate() {
+        super.onCreate()
+        database = Room.databaseBuilder(
+            applicationContext,
+            AppDatabase::class.java,
+            DATABASE_NAME
+        ).addMigrations(MIGRATION_1_2).build()
+        sharedPrefs = getSharedPreferences(THEME_PREFS, MODE_PRIVATE)
+        darkTheme = sharedPrefs.getBoolean(DARK_THEME_KEY, false)
+        switchTheme(darkTheme)
+    }
+
+    fun switchTheme(darkThemeEnabled: Boolean) {
+        darkTheme = darkThemeEnabled
+        AppCompatDelegate.setDefaultNightMode(
+            if (darkThemeEnabled) {
+                AppCompatDelegate.MODE_NIGHT_YES
+            } else {
+                AppCompatDelegate.MODE_NIGHT_NO
+            }
+        )
+        sharedPrefs.edit()
+            .putBoolean(DARK_THEME_KEY, darkTheme)
+            .apply()
+    }
+
+    companion object {
+        private const val DATABASE_NAME = "playlist_database.db"
+
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS playlists (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        name TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        coverPath TEXT,
+                        tracksCount INTEGER NOT NULL DEFAULT 0,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS playlist_track_cross_ref (
+                        playlistId INTEGER NOT NULL,
+                        trackId INTEGER NOT NULL,
+                        PRIMARY KEY(playlistId, trackId),
+                        FOREIGN KEY(playlistId) REFERENCES playlists(id) ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_playlist_track_cross_ref_playlistId ON playlist_track_cross_ref(playlistId)"
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_playlist_track_cross_ref_trackId ON playlist_track_cross_ref(trackId)"
+                )
+            }
+        }
+    }
+}
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\AppDatabase.kt ---
+
+package com.example.alexrosh
+
+import androidx.room.Database
+import androidx.room.RoomDatabase
+
+@Database(
+    entities = [TrackEntity::class, PlaylistEntity::class, PlaylistTrackCrossRef::class],
+    version = 2,
+    exportSchema = false
+)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun trackDao(): TrackDao
+    abstract fun playlistDao(): PlaylistDao
+}
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\AudioPlayerActivity.kt ---
+
+package com.example.alexrosh
+
+import android.content.Context
+import android.content.Intent
+import android.content.res.ColorStateList
+import android.media.MediaPlayer
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.View
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.core.content.ContextCompat
+import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.lifecycle.lifecycleScope
+import com.bumptech.glide.Glide
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.gson.Gson
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class AudioPlayerActivity : AppCompatActivity() {
+
+    private val gson = Gson()
+    private val mediaPlayer = MediaPlayer()
+    private val playerHandler = Handler(Looper.getMainLooper())
+
+    private lateinit var playButton: ImageButton
+    private lateinit var currentTimeValue: TextView
+    private lateinit var likeButton: ImageButton
+    private lateinit var currentTrack: Track
+    private lateinit var bottomSheetBehavior: BottomSheetBehavior<LinearLayout>
+    private lateinit var playlistsAdapter: PlaylistBottomSheetAdapter
+
+    private var playerState = STATE_DEFAULT
+    private var isFavorite = false
+    private val progressRunnable = object : Runnable {
+        override fun run() {
+            if (playerState == STATE_PLAYING) {
+                currentTimeValue.text =
+                    SimpleDateFormat("mm:ss", Locale.getDefault()).format(mediaPlayer.currentPosition)
+                playerHandler.postDelayed(this, TIMER_REFRESH_DELAY_MILLIS)
+            }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_audio_player)
+
+        val track = intent.getStringExtra(TRACK_JSON_KEY)?.let { json ->
+            gson.fromJson(json, Track::class.java)
+        }
+
+        if (track == null) {
+            finish()
+            return
+        }
+
+        currentTrack = track
+        setupViews(track)
+        preparePlayer(track.previewUrl)
+        checkFavoriteState(track.trackId)
+        setupBackHandler()
+    }
+
+    private fun setupViews(track: Track) {
+        val backButton = findViewById<ImageView>(R.id.back_button)
+        val coverArtwork = findViewById<ImageView>(R.id.cover_artwork)
+        val trackName = findViewById<TextView>(R.id.track_name)
+        val artistName = findViewById<TextView>(R.id.artist_name)
+        val albumLabel = findViewById<TextView>(R.id.album_label)
+        val albumValue = findViewById<TextView>(R.id.album_value)
+        val yearValue = findViewById<TextView>(R.id.year_value)
+        val genreValue = findViewById<TextView>(R.id.genre_value)
+        val countryValue = findViewById<TextView>(R.id.country_value)
+        val durationValue = findViewById<TextView>(R.id.duration_value)
+        currentTimeValue = findViewById(R.id.current_time_value)
+        val addToPlaylistButton = findViewById<ImageButton>(R.id.add_to_playlist_button)
+        val newPlaylistButton = findViewById<com.google.android.material.button.MaterialButton>(R.id.new_playlist_button)
+        val playlistBottomSheet = findViewById<LinearLayout>(R.id.playlist_bottom_sheet)
+        val playlistsRecycler = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.playlists_bottom_sheet_recycler)
+        playButton = findViewById(R.id.play_button)
+        likeButton = findViewById(R.id.like_button)
+
+        backButton.setOnClickListener { finish() }
+
+        Glide.with(this)
+            .load(track.getCoverArtwork())
+            .placeholder(R.drawable.placeholder)
+            .error(R.drawable.placeholder)
+            .centerCrop()
+            .into(coverArtwork)
+
+        trackName.text = track.trackName
+        artistName.text = track.artistName
+        yearValue.text = track.releaseDate?.take(4).orEmpty()
+        genreValue.text = track.primaryGenreName.orEmpty()
+        countryValue.text = track.country.orEmpty()
+        val formattedTrackTime = SimpleDateFormat("mm:ss", Locale.getDefault()).format(track.trackTimeMillis)
+        durationValue.text = formattedTrackTime
+        currentTimeValue.text = getString(R.string.audio_player_current_time_default)
+
+        if (track.collectionName.isNullOrEmpty()) {
+            albumLabel.visibility = View.GONE
+            albumValue.visibility = View.GONE
+        } else {
+            albumLabel.visibility = View.VISIBLE
+            albumValue.visibility = View.VISIBLE
+            albumValue.text = track.collectionName
+        }
+
+        addToPlaylistButton.setImageResource(R.drawable.ic_playlist_add)
+        playButton.setImageResource(R.drawable.ic_play)
+        renderLikeButton()
+
+        val secondaryIconTint = ContextCompat.getColor(this, R.color.audio_player_icon_on_secondary)
+        val primaryIconTint = ContextCompat.getColor(this, R.color.audio_player_icon_on_primary)
+        addToPlaylistButton.imageTintList = ColorStateList.valueOf(secondaryIconTint)
+        playButton.imageTintList = ColorStateList.valueOf(primaryIconTint)
+        likeButton.imageTintList = null
+
+        playButton.isEnabled = false
+        currentTimeValue.text = getString(R.string.audio_player_current_time_default)
+
+        setupBottomSheet(playlistBottomSheet, playlistsRecycler)
+        addToPlaylistButton.setOnClickListener { showBottomSheet() }
+        newPlaylistButton.setOnClickListener {
+            startActivity(NewPlaylistActivity.createIntent(this))
+        }
+        playButton.setOnClickListener { playbackControl() }
+        likeButton.setOnClickListener { onLikeClicked() }
+    }
+
+    private fun setupBottomSheet(
+        bottomSheet: LinearLayout,
+        playlistsRecycler: androidx.recyclerview.widget.RecyclerView
+    ) {
+        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet).apply {
+            state = BottomSheetBehavior.STATE_HIDDEN
+            isHideable = true
+            skipCollapsed = false
+        }
+        playlistsAdapter = PlaylistBottomSheetAdapter { playlist ->
+            onPlaylistSelected(playlist)
+        }
+        playlistsRecycler.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        playlistsRecycler.adapter = playlistsAdapter
+        observePlaylists()
+    }
+
+    private fun observePlaylists() {
+        lifecycleScope.launch {
+            (applicationContext as App).database.playlistDao().getPlaylists().collectLatest {
+                playlistsAdapter.setItems(it)
+            }
+        }
+    }
+
+    private fun showBottomSheet() {
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+    }
+
+    private fun setupBackHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (::bottomSheetBehavior.isInitialized &&
+                    bottomSheetBehavior.state != BottomSheetBehavior.STATE_HIDDEN
+                ) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+                } else {
+                    finish()
+                }
+            }
+        })
+    }
+
+    private fun onPlaylistSelected(playlist: PlaylistEntity) {
+        lifecycleScope.launch {
+            val isAdded = withContext(Dispatchers.IO) {
+                (applicationContext as App).database.playlistDao()
+                    .addTrackToPlaylist(PlaylistTrackCrossRef(playlist.id, currentTrack.trackId))
+            }
+            val message = if (isAdded) {
+                getString(R.string.playlist_track_added, playlist.name)
+            } else {
+                getString(R.string.playlist_track_already_added, playlist.name)
+            }
+            android.widget.Toast.makeText(this@AudioPlayerActivity, message, android.widget.Toast.LENGTH_SHORT).show()
+            if (isAdded) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+            }
+        }
+    }
+
+    private fun checkFavoriteState(trackId: Long) {
+        lifecycleScope.launch {
+            isFavorite = withContext(Dispatchers.IO) {
+                (applicationContext as App).database.trackDao().isFavorite(trackId)
+            }
+            renderLikeButton()
+        }
+    }
+
+    private fun onLikeClicked() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val dao = (applicationContext as App).database.trackDao()
+                if (isFavorite) {
+                    dao.getTrackById(currentTrack.trackId)?.let { dao.deleteTrack(it) }
+                } else {
+                    dao.insertTrack(currentTrack.toEntity())
+                }
+            }
+            isFavorite = !isFavorite
+            renderLikeButton()
+        }
+    }
+
+    private fun renderLikeButton() {
+        if (!::likeButton.isInitialized) return
+        likeButton.setImageResource(if (isFavorite) R.drawable.ic_like_filled else R.drawable.ic_like)
+    }
+
+    private fun preparePlayer(previewUrl: String?) {
+        if (previewUrl.isNullOrEmpty()) {
+            playButton.isEnabled = false
+            playButton.setImageResource(R.drawable.ic_play)
+            return
+        }
+
+        try {
+            mediaPlayer.setDataSource(previewUrl)
+            mediaPlayer.setOnPreparedListener {
+                playButton.isEnabled = true
+                playerState = STATE_PREPARED
+            }
+            mediaPlayer.setOnCompletionListener {
+                playerState = STATE_PREPARED
+                playButton.setImageResource(R.drawable.ic_play)
+                currentTimeValue.text = getString(R.string.audio_player_current_time_default)
+                stopProgressTimer()
+            }
+            mediaPlayer.prepareAsync()
+        } catch (_: IOException) {
+            playButton.isEnabled = false
+        }
+    }
+
+    private fun startPlayer() {
+        mediaPlayer.start()
+        playButton.setImageResource(R.drawable.ic_pause)
+        playerState = STATE_PLAYING
+        startProgressTimer()
+    }
+
+    private fun pausePlayer() {
+        mediaPlayer.pause()
+        playButton.setImageResource(R.drawable.ic_play)
+        playerState = STATE_PAUSED
+        stopProgressTimer()
+    }
+
+    private fun playbackControl() {
+        when (playerState) {
+            STATE_PLAYING -> pausePlayer()
+            STATE_PREPARED, STATE_PAUSED -> startPlayer()
+        }
+    }
+
+    private fun startProgressTimer() {
+        playerHandler.removeCallbacks(progressRunnable)
+        playerHandler.post(progressRunnable)
+    }
+
+    private fun stopProgressTimer() {
+        playerHandler.removeCallbacks(progressRunnable)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (playerState == STATE_PLAYING) {
+            pausePlayer()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopProgressTimer()
+        mediaPlayer.release()
+    }
+
+    companion object {
+        private const val TRACK_JSON_KEY = "track_json"
+        private const val STATE_DEFAULT = 0
+        private const val STATE_PREPARED = 1
+        private const val STATE_PLAYING = 2
+        private const val STATE_PAUSED = 3
+        private const val TIMER_REFRESH_DELAY_MILLIS = 300L
+
+        fun createIntent(context: Context, track: Track): Intent {
+            val trackJson = Gson().toJson(track)
+            return Intent(context, AudioPlayerActivity::class.java)
+                .putExtra(TRACK_JSON_KEY, trackJson)
+        }
+    }
+}
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\ITunesApi.kt ---
+
+package com.example.alexrosh
+
+import retrofit2.Call
+import retrofit2.http.GET
+import retrofit2.http.Query
+
+interface ITunesApi {
+    @GET("/search?entity=song")
+    fun search(@Query("term") text: String): Call<TracksResponse>
+}
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\LibraryActivity.kt ---
+
+package com.example.alexrosh
+
+import android.os.Bundle
+import android.view.View
+import android.widget.ImageView
+import android.widget.LinearLayout
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.tabs.TabLayout
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class LibraryActivity : AppCompatActivity() {
+
+    private lateinit var tabs: TabLayout
+    private lateinit var favoriteTracksRecyclerView: RecyclerView
+    private lateinit var emptyFavoriteTracksPlaceholder: LinearLayout
+    private lateinit var favoriteTracksAdapter: TrackAdapter
+    private lateinit var playlistsRecyclerView: RecyclerView
+    private lateinit var playlistsContent: LinearLayout
+    private lateinit var emptyPlaylistsPlaceholder: LinearLayout
+    private lateinit var playlistsAdapter: PlaylistGridAdapter
+    private lateinit var newPlaylistButton: MaterialButton
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_library)
+
+        initViews()
+        setupRecycler()
+        setupTabs()
+        observePlaylists()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        loadFavoriteTracks()
+    }
+
+    private fun initViews() {
+        val backButton = findViewById<ImageView>(R.id.back_button)
+        tabs = findViewById(R.id.library_tabs)
+        favoriteTracksRecyclerView = findViewById(R.id.favorite_tracks_recycler_view)
+        emptyFavoriteTracksPlaceholder = findViewById(R.id.empty_favorite_tracks_placeholder)
+        playlistsRecyclerView = findViewById(R.id.playlists_recycler_view)
+        playlistsContent = findViewById(R.id.playlists_content)
+        emptyPlaylistsPlaceholder = findViewById(R.id.empty_playlists_placeholder)
+        newPlaylistButton = findViewById(R.id.new_playlist_button)
+        backButton.setOnClickListener { finish() }
+        newPlaylistButton.setOnClickListener {
+            startActivity(NewPlaylistActivity.createIntent(this))
+        }
+    }
+
+    private fun setupRecycler() {
+        favoriteTracksAdapter = TrackAdapter { track ->
+            startActivity(AudioPlayerActivity.createIntent(this, track))
+        }
+        playlistsAdapter = PlaylistGridAdapter { }
+        favoriteTracksRecyclerView.layoutManager = LinearLayoutManager(this)
+        favoriteTracksRecyclerView.adapter = favoriteTracksAdapter
+        playlistsRecyclerView.layoutManager = GridLayoutManager(this, 2)
+        playlistsRecyclerView.adapter = playlistsAdapter
+    }
+
+    private fun setupTabs() {
+        tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                if (tab.position == TAB_FAVORITES) {
+                    showFavoritesTab()
+                } else {
+                    showPlaylistsTab()
+                }
+            }
+
+            override fun onTabUnselected(tab: TabLayout.Tab) = Unit
+
+            override fun onTabReselected(tab: TabLayout.Tab) = Unit
+        })
+        showFavoritesTab()
+    }
+
+    private fun observePlaylists() {
+        lifecycleScope.launch {
+            (applicationContext as App).database.playlistDao().getPlaylists().collectLatest { playlists ->
+                playlistsAdapter.setItems(playlists)
+                val isEmpty = playlists.isEmpty()
+                playlistsRecyclerView.visibility = if (isEmpty) View.GONE else View.VISIBLE
+                if (tabs.selectedTabPosition == TAB_PLAYLISTS) {
+                    emptyPlaylistsPlaceholder.visibility = if (isEmpty) View.VISIBLE else View.GONE
+                }
+            }
+        }
+    }
+
+    private fun loadFavoriteTracks() {
+        lifecycleScope.launch {
+            val favoriteTracks = withContext(Dispatchers.IO) {
+                (applicationContext as App).database.trackDao().getAllTracks().map { it.toTrack() }
+            }
+
+            favoriteTracksAdapter.tracks.clear()
+            favoriteTracksAdapter.tracks.addAll(favoriteTracks)
+            favoriteTracksAdapter.notifyDataSetChanged()
+
+            if (tabs.selectedTabPosition == TAB_FAVORITES) {
+                if (favoriteTracks.isEmpty()) {
+                    favoriteTracksRecyclerView.visibility = View.GONE
+                    emptyFavoriteTracksPlaceholder.visibility = View.VISIBLE
+                } else {
+                    favoriteTracksRecyclerView.visibility = View.VISIBLE
+                    emptyFavoriteTracksPlaceholder.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    private fun showFavoritesTab() {
+        playlistsContent.visibility = View.GONE
+        emptyPlaylistsPlaceholder.visibility = View.GONE
+        favoriteTracksRecyclerView.visibility =
+            if (favoriteTracksAdapter.itemCount == 0) View.GONE else View.VISIBLE
+        emptyFavoriteTracksPlaceholder.visibility =
+            if (favoriteTracksAdapter.itemCount == 0) View.VISIBLE else View.GONE
+    }
+
+    private fun showPlaylistsTab() {
+        playlistsContent.visibility = View.VISIBLE
+        favoriteTracksRecyclerView.visibility = View.GONE
+        emptyFavoriteTracksPlaceholder.visibility = View.GONE
+        val isEmpty = playlistsAdapter.itemCount == 0
+        playlistsRecyclerView.visibility = if (isEmpty) View.GONE else View.VISIBLE
+        emptyPlaylistsPlaceholder.visibility = if (isEmpty) View.VISIBLE else View.GONE
+    }
+
+    companion object {
+        private const val TAB_FAVORITES = 0
+        private const val TAB_PLAYLISTS = 1
+    }
+}
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\MainActivity.kt ---
+
+package com.example.alexrosh
+
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.os.Bundle
+import android.widget.LinearLayout
+import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+
+class MainActivity : AppCompatActivity() {
+    @SuppressLint("UnsafeIntentLaunch")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContentView(R.layout.activity_main)
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            insets
+        }
+
+        val searchBtn = findViewById<LinearLayout>(R.id.search_btn)
+        val libraryBtn = findViewById<LinearLayout>(R.id.library_btn)
+        val settingBtn = findViewById<LinearLayout>(R.id.settings_btn)
+
+        // РџРµСЂРµС…РѕРґ РЅР° СЌРєСЂР°РЅ РџРѕРёСЃРєР°
+        searchBtn.setOnClickListener {
+            val searchIntent = Intent(this, SearchActivity::class.java)
+            startActivity(searchIntent)
+        }
+
+        // РџРµСЂРµС…РѕРґ РЅР° СЌРєСЂР°РЅ РњРµРґРёР°С‚РµРєРё
+        libraryBtn.setOnClickListener {
+            val libraryIntent = Intent(this, LibraryActivity::class.java)
+            startActivity(libraryIntent)
+        }
+
+        // РџРµСЂРµС…РѕРґ РЅР° СЌРєСЂР°РЅ РќР°СЃС‚СЂРѕРµРє
+        settingBtn.setOnClickListener {
+            val settingsIntent = Intent(this, SettingsActivity::class.java)
+            startActivity(settingsIntent)
+        }
+    }
+}
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\NewPlaylistActivity.kt ---
+
+package com.example.alexrosh
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.os.Environment
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.Toast
+import android.view.View
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.doAfterTextChanged
+import androidx.lifecycle.lifecycleScope
+import com.bumptech.glide.Glide
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import java.io.File
+import java.io.FileOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class NewPlaylistActivity : AppCompatActivity() {
+
+    private lateinit var nameInput: EditText
+    private lateinit var descriptionInput: EditText
+    private lateinit var createButton: MaterialButton
+    private lateinit var coverImage: ImageView
+    private lateinit var coverHint: View
+
+    private var selectedCoverPath: String? = null
+
+    private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch {
+            val path = withContext(Dispatchers.IO) { saveImageToPrivateStorage(uri) }
+            if (path != null) {
+                selectedCoverPath = path
+                renderCover(path)
+            }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_new_playlist)
+        initViews()
+        setupListeners()
+        setupBackHandler()
+    }
+
+    private fun initViews() {
+        nameInput = findViewById(R.id.name_input)
+        descriptionInput = findViewById(R.id.description_input)
+        createButton = findViewById(R.id.create_button)
+        coverImage = findViewById(R.id.cover_image)
+        coverHint = findViewById(R.id.cover_hint)
+    }
+
+    private fun setupListeners() {
+        findViewById<ImageView>(R.id.back_button).setOnClickListener { handleBackPress() }
+        findViewById<FrameLayout>(R.id.cover_picker).setOnClickListener {
+            imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }
+        nameInput.doAfterTextChanged {
+            createButton.isEnabled = !nameInput.text.isNullOrBlank()
+        }
+        createButton.setOnClickListener { createPlaylist() }
+    }
+
+    private fun setupBackHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                this@NewPlaylistActivity.handleBackPress()
+            }
+        })
+    }
+
+    private fun handleBackPress() {
+        if (!isDataModified()) {
+            finish()
+            return
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.new_playlist_finish_creation_title)
+            .setPositiveButton(R.string.new_playlist_finish_creation_positive) { _, _ -> finish() }
+            .setNegativeButton(R.string.new_playlist_finish_creation_negative, null)
+            .show()
+    }
+
+    private fun isDataModified(): Boolean {
+        return !nameInput.text.isNullOrBlank() ||
+            !descriptionInput.text.isNullOrBlank() ||
+            !selectedCoverPath.isNullOrBlank()
+    }
+
+    private fun createPlaylist() {
+        val name = nameInput.text?.toString()?.trim().orEmpty()
+        if (name.isEmpty()) return
+        val description = descriptionInput.text?.toString()?.trim().orEmpty()
+
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                (applicationContext as App).database.playlistDao().insertPlaylist(
+                    PlaylistEntity(
+                        name = name,
+                        description = description,
+                        coverPath = selectedCoverPath
+                    )
+                )
+            }
+            Toast.makeText(
+                this@NewPlaylistActivity,
+                getString(R.string.new_playlist_created, name),
+                Toast.LENGTH_SHORT
+            ).show()
+            setResult(RESULT_OK, Intent())
+            finish()
+        }
+    }
+
+    private fun renderCover(path: String) {
+        coverHint.visibility = View.GONE
+        Glide.with(this)
+            .load(File(path))
+            .placeholder(R.drawable.placeholder)
+            .error(R.drawable.placeholder)
+            .centerCrop()
+            .into(coverImage)
+    }
+
+    private fun saveImageToPrivateStorage(uri: Uri): String? {
+        val picturesDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: return null
+        val coversDir = File(picturesDir, "playlist_covers")
+        if (!coversDir.exists()) coversDir.mkdirs()
+        val file = File(coversDir, "cover_${System.currentTimeMillis()}.jpg")
+        contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(file).use { output -> input.copyTo(output) }
+            return file.absolutePath
+        }
+        return null
+    }
+
+    companion object {
+        fun createIntent(context: android.content.Context): Intent {
+            return Intent(context, NewPlaylistActivity::class.java)
+        }
+    }
+}
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\PlaylistAdapters.kt ---
+
+package com.example.alexrosh
+
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners
+import java.io.File
+
+class PlaylistGridAdapter(
+    private val onClick: (PlaylistEntity) -> Unit
+) : RecyclerView.Adapter<PlaylistGridAdapter.PlaylistGridViewHolder>() {
+
+    private val playlists = mutableListOf<PlaylistEntity>()
+
+    fun setItems(items: List<PlaylistEntity>) {
+        playlists.clear()
+        playlists.addAll(items)
+        notifyDataSetChanged()
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaylistGridViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.playlist_grid_item, parent, false)
+        return PlaylistGridViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: PlaylistGridViewHolder, position: Int) {
+        val playlist = playlists[position]
+        holder.bind(playlist)
+        holder.itemView.setOnClickListener { onClick(playlist) }
+    }
+
+    override fun getItemCount(): Int = playlists.size
+
+    class PlaylistGridViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val cover = itemView.findViewById<ImageView>(R.id.playlist_cover)
+        private val name = itemView.findViewById<TextView>(R.id.playlist_name)
+        private val count = itemView.findViewById<TextView>(R.id.playlist_track_count)
+
+        fun bind(playlist: PlaylistEntity) {
+            name.text = playlist.name
+            count.text = itemView.context.getTracksCountText(playlist.tracksCount)
+            val source = playlist.coverPath?.let(::File) ?: R.drawable.placeholder
+            Glide.with(itemView)
+                .load(source)
+                .placeholder(R.drawable.placeholder)
+                .error(R.drawable.placeholder)
+                .centerCrop()
+                .transform(RoundedCorners(itemView.resources.getDimensionPixelSize(R.dimen.track_artwork_corner_radius)))
+                .into(cover)
+        }
+    }
+}
+
+class PlaylistBottomSheetAdapter(
+    private val onClick: (PlaylistEntity) -> Unit
+) : RecyclerView.Adapter<PlaylistBottomSheetAdapter.PlaylistBottomSheetViewHolder>() {
+
+    private val playlists = mutableListOf<PlaylistEntity>()
+
+    fun setItems(items: List<PlaylistEntity>) {
+        playlists.clear()
+        playlists.addAll(items)
+        notifyDataSetChanged()
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaylistBottomSheetViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.playlist_bottom_sheet_item, parent, false)
+        return PlaylistBottomSheetViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: PlaylistBottomSheetViewHolder, position: Int) {
+        val playlist = playlists[position]
+        holder.bind(playlist)
+        holder.itemView.setOnClickListener { onClick(playlist) }
+    }
+
+    override fun getItemCount(): Int = playlists.size
+
+    class PlaylistBottomSheetViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val cover = itemView.findViewById<ImageView>(R.id.playlist_cover)
+        private val name = itemView.findViewById<TextView>(R.id.playlist_name)
+        private val count = itemView.findViewById<TextView>(R.id.playlist_track_count)
+
+        fun bind(playlist: PlaylistEntity) {
+            name.text = playlist.name
+            count.text = itemView.context.getTracksCountText(playlist.tracksCount)
+            val source = playlist.coverPath?.let(::File) ?: R.drawable.placeholder
+            Glide.with(itemView)
+                .load(source)
+                .placeholder(R.drawable.placeholder)
+                .error(R.drawable.placeholder)
+                .centerCrop()
+                .transform(RoundedCorners(itemView.resources.getDimensionPixelSize(R.dimen.track_artwork_corner_radius)))
+                .into(cover)
+        }
+    }
+}
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\PlaylistDao.kt ---
+
+package com.example.alexrosh
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface PlaylistDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlaylist(playlist: PlaylistEntity): Long
+
+    @Query("SELECT * FROM playlists ORDER BY createdAt DESC")
+    fun getPlaylists(): Flow<List<PlaylistEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCrossRef(crossRef: PlaylistTrackCrossRef): Long
+
+    @Query("SELECT EXISTS(SELECT 1 FROM playlist_track_cross_ref WHERE trackId = :trackId AND playlistId = :playlistId)")
+    suspend fun isTrackInPlaylist(trackId: Long, playlistId: Long): Boolean
+
+    @Query("UPDATE playlists SET tracksCount = tracksCount + 1 WHERE id = :playlistId")
+    suspend fun incrementTrackCount(playlistId: Long)
+
+    @Transaction
+    suspend fun addTrackToPlaylist(crossRef: PlaylistTrackCrossRef): Boolean {
+        if (isTrackInPlaylist(crossRef.trackId, crossRef.playlistId)) return false
+        val rowId = insertCrossRef(crossRef)
+        if (rowId != -1L) {
+            incrementTrackCount(crossRef.playlistId)
+            return true
+        }
+        return false
+    }
+}
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\PlaylistEntity.kt ---
+
+package com.example.alexrosh
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "playlists")
+data class PlaylistEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val name: String,
+    val description: String,
+    val coverPath: String?,
+    val tracksCount: Int = 0,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\PlaylistTrackCrossRef.kt ---
+
+package com.example.alexrosh
+
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+
+@Entity(
+    tableName = "playlist_track_cross_ref",
+    primaryKeys = ["playlistId", "trackId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = PlaylistEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["playlistId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index("playlistId"), Index("trackId")]
+)
+data class PlaylistTrackCrossRef(
+    val playlistId: Long,
+    val trackId: Long
+)
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\PlaylistUiUtils.kt ---
+
+package com.example.alexrosh
+
+import android.content.Context
+
+fun Context.getTracksCountText(count: Int): String {
+    val absCount = kotlin.math.abs(count) % 100
+    val lastDigit = absCount % 10
+    val template = when {
+        absCount in 11..14 -> R.string.playlist_tracks_count_many
+        lastDigit == 1 -> R.string.playlist_tracks_count_single
+        lastDigit in 2..4 -> R.string.playlist_tracks_count_few
+        else -> R.string.playlist_tracks_count_many
+    }
+    return getString(template, count)
+}
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\SearchActivity.kt ---
+
+package com.example.alexrosh
+
+import android.content.Context
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
+import android.view.inputmethod.InputMethodManager
+import android.widget.Button
+import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+
+class SearchActivity : AppCompatActivity() {
+
+    private var currentSearchQuery: String = ""
+    private var lastSearchQuery: String = ""
+    private var isClickAllowed = true
+
+    private val searchHandler = Handler(Looper.getMainLooper())
+    private val clickHandler = Handler(Looper.getMainLooper())
+    private val searchRunnable = Runnable { searchRequest() }
+    private val clickRunnable = Runnable { isClickAllowed = true }
+
+    // --- Views ---
+    private lateinit var searchEditText: EditText
+    private lateinit var resultsRecyclerView: RecyclerView
+    private lateinit var historyRecyclerView: RecyclerView
+    private lateinit var historyView: LinearLayout
+    private lateinit var clearHistoryButton: Button
+    private lateinit var nothingFoundPlaceholder: LinearLayout
+    private lateinit var connectionErrorPlaceholder: LinearLayout
+    private lateinit var nothingFoundIcon: ImageView
+    private lateinit var connectionErrorIcon: ImageView
+    private lateinit var updateButton: Button
+    private lateinit var progressBar: ProgressBar
+
+    // --- Adapters and Data ---
+    private val tracks = ArrayList<Track>()
+    private lateinit var resultsAdapter: TrackAdapter
+    private lateinit var searchHistory: SearchHistory
+    private lateinit var historyAdapter: TrackAdapter
+
+    // --- Network ---
+    private val itunesBaseUrl = "https://itunes.apple.com"
+    private val retrofit = Retrofit.Builder()
+        .baseUrl(itunesBaseUrl)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+    private val itunesService = retrofit.create(ITunesApi::class.java)
+
+    // --- Enum РґР»СЏ СЃРѕСЃС‚РѕСЏРЅРёР№ СЌРєСЂР°РЅР° ---
+    private enum class SearchState {
+        LOADING,
+        CONTENT,
+        ERROR,
+        EMPTY,
+        HISTORY
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_search)
+
+        initViews()
+        setupSearchHistory()
+        setupSearchResults()
+        setupListeners()
+
+        // РџРѕРєР°Р·С‹РІР°РµРј РёСЃС‚РѕСЂРёСЋ, РµСЃР»Рё РѕРЅР° РµСЃС‚СЊ Рё РїРѕР»Рµ РїРѕРёСЃРєР° РІ С„РѕРєСѓСЃРµ
+        if (searchEditText.hasFocus() && searchEditText.text.isEmpty()) {
+            showHistoryOrHide()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(SEARCH_QUERY, currentSearchQuery)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        currentSearchQuery = savedInstanceState.getString(SEARCH_QUERY, "")
+        searchEditText.setText(currentSearchQuery)
+    }
+
+    private fun initViews() {
+        searchEditText = findViewById(R.id.search_edit_text)
+        historyView = findViewById(R.id.search_history_view)
+        clearHistoryButton = findViewById(R.id.clear_history_button)
+        resultsRecyclerView = findViewById(R.id.track_recycler_view)
+        historyRecyclerView = findViewById(R.id.history_recycler_view)
+        nothingFoundPlaceholder = findViewById(R.id.nothing_found_placeholder)
+        connectionErrorPlaceholder = findViewById(R.id.connection_error_placeholder)
+        nothingFoundIcon = findViewById(R.id.nothing_found_icon)
+        connectionErrorIcon = findViewById(R.id.connection_error_icon)
+        updateButton = findViewById(R.id.update_button)
+        progressBar = findViewById(R.id.progress_bar)
+    }
+
+    private fun setupSearchHistory() {
+        val sharedPrefs = getSharedPreferences(SEARCH_HISTORY_PREFS, MODE_PRIVATE)
+        searchHistory = SearchHistory(sharedPrefs)
+        historyAdapter = TrackAdapter { track ->
+            if (clickDebounce()) {
+                openAudioPlayer(track)
+            }
+        }
+        historyRecyclerView.layoutManager = LinearLayoutManager(this)
+        historyRecyclerView.adapter = historyAdapter
+        historyAdapter.tracks = searchHistory.read()
+    }
+
+    private fun setupSearchResults() {
+        resultsAdapter = TrackAdapter { track ->
+            searchHistory.addTrack(track)
+            historyAdapter.tracks = searchHistory.read()
+            historyAdapter.notifyDataSetChanged()
+            if (clickDebounce()) {
+                openAudioPlayer(track)
+            }
+        }
+        resultsAdapter.tracks = tracks
+        resultsRecyclerView.layoutManager = LinearLayoutManager(this)
+        resultsRecyclerView.adapter = resultsAdapter
+    }
+
+    private fun openAudioPlayer(track: Track) {
+        val intent = AudioPlayerActivity.createIntent(this, track)
+        startActivity(intent)
+    }
+
+    private fun setupListeners() {
+        val backButton = findViewById<ImageView>(R.id.back_button)
+        val clearIcon = findViewById<ImageView>(R.id.clear_icon)
+
+        backButton.setOnClickListener { finish() }
+
+        clearIcon.setOnClickListener {
+            searchEditText.setText("")
+            tracks.clear()
+            resultsAdapter.notifyDataSetChanged()
+            hideKeyboard(it)
+            showHistoryOrHide()
+        }
+
+        updateButton.setOnClickListener { searchRequest() }
+
+        clearHistoryButton.setOnClickListener {
+            searchHistory.clear()
+            historyAdapter.tracks.clear()
+            historyAdapter.notifyDataSetChanged()
+            historyView.visibility = View.GONE
+        }
+
+        searchEditText.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) showHistoryOrHide()
+        }
+
+        val simpleTextWatcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                currentSearchQuery = s.toString()
+                searchHandler.removeCallbacks(searchRunnable)
+                clearIcon.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
+                if (s.isNullOrEmpty() && searchEditText.hasFocus()) {
+                    progressBar.visibility = View.GONE
+                    tracks.clear()
+                    resultsAdapter.notifyDataSetChanged()
+                    showHistoryOrHide()
+                } else if (!s.isNullOrBlank()) {
+                    searchHandler.postDelayed(searchRunnable, SEARCH_DEBOUNCE_DELAY_MILLIS)
+                }
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        }
+        searchEditText.addTextChangedListener(simpleTextWatcher)
+    }
+
+    private fun searchRequest() {
+        if (searchEditText.text.isNotEmpty()) {
+            lastSearchQuery = searchEditText.text.toString()
+            showState(SearchState.LOADING)
+            progressBar.visibility = View.VISIBLE
+
+            itunesService.search(lastSearchQuery).enqueue(object : Callback<TracksResponse> {
+                override fun onResponse(call: Call<TracksResponse>, response: Response<TracksResponse>) {
+                    progressBar.visibility = View.GONE
+                    if (response.isSuccessful) {
+                        val responseBody = response.body()
+                        if (responseBody != null && responseBody.results.isNotEmpty()) {
+                            tracks.clear()
+                            tracks.addAll(responseBody.results)
+                            showState(SearchState.CONTENT)
+                        } else {
+                            showState(SearchState.EMPTY)
+                        }
+                    } else {
+                        showState(SearchState.ERROR)
+                    }
+                }
+
+                override fun onFailure(call: Call<TracksResponse>, t: Throwable) {
+                    progressBar.visibility = View.GONE
+                    showState(SearchState.ERROR)
+                }
+            })
+        }
+    }
+
+    private fun showHistoryOrHide() {
+        if (searchEditText.text.isEmpty() && historyAdapter.tracks.isNotEmpty()) {
+            showState(SearchState.HISTORY)
+        } else {
+            historyView.visibility = View.GONE
+        }
+    }
+
+    private fun showState(state: SearchState) {
+        progressBar.visibility = View.GONE
+        resultsRecyclerView.visibility = View.GONE
+        nothingFoundPlaceholder.visibility = View.GONE
+        connectionErrorPlaceholder.visibility = View.GONE
+        nothingFoundIcon.visibility = View.VISIBLE
+        connectionErrorIcon.visibility = View.VISIBLE
+        historyView.visibility = View.GONE
+
+        when (state) {
+            SearchState.LOADING -> progressBar.visibility = View.VISIBLE
+            SearchState.CONTENT -> {
+                resultsRecyclerView.visibility = View.VISIBLE
+                resultsAdapter.notifyDataSetChanged()
+            }
+            SearchState.ERROR -> {
+                connectionErrorPlaceholder.visibility = View.VISIBLE
+                connectionErrorIcon.visibility = View.VISIBLE
+            }
+            SearchState.EMPTY -> {
+                nothingFoundPlaceholder.visibility = View.VISIBLE
+                nothingFoundIcon.visibility = View.VISIBLE
+            }
+            SearchState.HISTORY -> historyView.visibility = View.VISIBLE
+        }
+    }
+
+    private fun hideKeyboard(view: View) {
+        val inputMethodManager = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+        inputMethodManager?.hideSoftInputFromWindow(view.windowToken, 0)
+    }
+
+    private fun clickDebounce(): Boolean {
+        val current = isClickAllowed
+        if (isClickAllowed) {
+            isClickAllowed = false
+            clickHandler.postDelayed(clickRunnable, CLICK_DEBOUNCE_DELAY_MILLIS)
+        }
+        return current
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        searchHandler.removeCallbacks(searchRunnable)
+        clickHandler.removeCallbacks(clickRunnable)
+    }
+
+    companion object {
+        private const val SEARCH_QUERY = "SEARCH_QUERY"
+        private const val SEARCH_DEBOUNCE_DELAY_MILLIS = 2000L
+        private const val CLICK_DEBOUNCE_DELAY_MILLIS = 1000L
+    }
+}
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\SearchHistory.kt ---
+
+package com.example.alexrosh
+
+import android.content.SharedPreferences
+import com.google.gson.Gson
+
+const val SEARCH_HISTORY_PREFS = "search_history_prefs"
+const val HISTORY_KEY = "history_key"
+private const val MAX_HISTORY_SIZE = 10
+
+class SearchHistory(private val sharedPreferences: SharedPreferences) {
+
+    private val gson = Gson()
+
+    fun read(): ArrayList<Track> {
+        val json = sharedPreferences.getString(HISTORY_KEY, null) ?: return ArrayList()
+        return gson.fromJson(json, Array<Track>::class.java).toCollection(ArrayList())
+    }
+
+    private fun write(tracks: List<Track>) {
+        val json = gson.toJson(tracks)
+        sharedPreferences.edit()
+            .putString(HISTORY_KEY, json)
+            .apply()
+    }
+
+    fun addTrack(track: Track) {
+        val history = read()
+        history.removeIf { it.trackId == track.trackId }
+        history.add(0, track)
+        if (history.size > MAX_HISTORY_SIZE) {
+            history.removeAt(history.size - 1)
+        }
+        write(history)
+    }
+
+    fun clear() {
+        write(ArrayList())
+    }
+}
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\SettingsActivity.kt ---
+
+package com.example.alexrosh
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.widget.FrameLayout
+import android.widget.ImageView
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.switchmaterial.SwitchMaterial
+
+class SettingsActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_settings)
+
+        // --- Р›РѕРіРёРєР° РїРµСЂРµРєР»СЋС‡Р°С‚РµР»СЏ С‚РµРјС‹ ---
+        val themeSwitcher = findViewById<SwitchMaterial>(R.id.theme_switch)
+
+        themeSwitcher.isChecked = (applicationContext as App).darkTheme
+
+        themeSwitcher.setOnCheckedChangeListener { _, checked ->
+            (applicationContext as App).switchTheme(checked)
+        }
+
+        // --- РћР±СЂР°Р±РѕС‚С‡РёРєРё РєРЅРѕРїРѕРє ---
+        val backButton = findViewById<ImageView>(R.id.back_button)
+        backButton.setOnClickListener {
+            finish()
+        }
+
+        val shareBtn = findViewById<FrameLayout>(R.id.share_btn)
+        shareBtn.setOnClickListener {
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, getString(R.string.share_message))
+            }
+            startActivity(Intent.createChooser(shareIntent, "РџРѕРґРµР»РёС‚СЊСЃСЏ"))
+        }
+
+        val supportBtn = findViewById<FrameLayout>(R.id.support_btn)
+        supportBtn.setOnClickListener {
+            val supportIntent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:")
+                putExtra(Intent.EXTRA_EMAIL, arrayOf(getString(R.string.support_email)))
+                putExtra(Intent.EXTRA_SUBJECT, getString(R.string.support_subject))
+                putExtra(Intent.EXTRA_TEXT, getString(R.string.support_body))
+            }
+            startActivity(supportIntent)
+        }
+
+        val agreementBtn = findViewById<FrameLayout>(R.id.agreement_btn)
+        agreementBtn.setOnClickListener {
+            val agreementIntent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse(getString(R.string.agreement_url))
+            }
+            startActivity(agreementIntent)
+        }
+    }
+}
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\Track.kt ---
+
+package com.example.alexrosh
+
+data class Track(
+    val trackId: Long,
+    val trackName: String,
+    val artistName: String,
+    val trackTimeMillis: Long,
+    val previewUrl: String?,
+    val artworkUrl100: String,
+    val collectionName: String?,
+    val releaseDate: String?,
+    val primaryGenreName: String?,
+    val country: String?
+) {
+    fun getCoverArtwork(): String {
+        return artworkUrl100.replaceAfterLast('/', "512x512bb.jpg")
+    }
+}
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\TrackAdapter.kt ---
+
+package com.example.alexrosh
+
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.TextView
+import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.RoundedCorners
+import java.text.SimpleDateFormat // <--- Р”РћР‘РђР’Р›Р•РќРћ
+import java.util.Locale // <--- Р”РћР‘РђР’Р›Р•РќРћ
+
+class TrackAdapter(
+    private val onTrackClick: (Track) -> Unit
+) : RecyclerView.Adapter<TrackAdapter.TrackViewHolder>() {
+
+    var tracks = ArrayList<Track>()
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TrackViewHolder {
+        val view = LayoutInflater.from(parent.context).inflate(R.layout.track_view, parent, false)
+        return TrackViewHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: TrackViewHolder, position: Int) {
+        val track = tracks[position]
+        holder.bind(track)
+        holder.itemView.setOnClickListener { onTrackClick(track) }
+    }
+
+    override fun getItemCount() = tracks.size
+
+    class TrackViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val artwork: ImageView = itemView.findViewById(R.id.track_artwork)
+        private val trackName: TextView = itemView.findViewById(R.id.track_name)
+        private val artistName: TextView = itemView.findViewById(R.id.track_artist_name)
+        private val trackTime: TextView = itemView.findViewById(R.id.track_time)
+
+        fun bind(track: Track) {
+            trackName.text = track.trackName
+            artistName.text = track.artistName
+            trackTime.text = SimpleDateFormat("mm:ss", Locale.getDefault()).format(track.trackTimeMillis)
+
+            Glide.with(itemView)
+                .load(track.artworkUrl100)
+                .placeholder(R.drawable.placeholder)
+                .centerCrop()
+                .transform(RoundedCorners(itemView.resources.getDimensionPixelSize(R.dimen.track_artwork_corner_radius)))
+                .into(artwork)
+        }
+    }
+}
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\TrackDao.kt ---
+
+package com.example.alexrosh
+
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+
+@Dao
+interface TrackDao {
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTrack(track: TrackEntity)
+
+    @Delete
+    suspend fun deleteTrack(track: TrackEntity)
+
+    @Query("SELECT * FROM favorite_tracks WHERE trackId = :id LIMIT 1")
+    suspend fun getTrackById(id: Long): TrackEntity?
+
+    @Query("SELECT * FROM favorite_tracks ORDER BY timestamp DESC")
+    suspend fun getAllTracks(): List<TrackEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM favorite_tracks WHERE trackId = :id)")
+    suspend fun isFavorite(id: Long): Boolean
+}
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\TrackEntity.kt ---
+
+package com.example.alexrosh
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "favorite_tracks")
+data class TrackEntity(
+    @PrimaryKey
+    val trackId: Long,
+    val trackName: String,
+    val artistName: String,
+    val trackTimeMillis: Long,
+    val previewUrl: String?,
+    val artworkUrl100: String,
+    val collectionName: String?,
+    val releaseDate: String?,
+    val primaryGenreName: String?,
+    val country: String?,
+    val timestamp: Long
+)
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\TrackMappers.kt ---
+
+package com.example.alexrosh
+
+fun Track.toEntity(timestamp: Long = System.currentTimeMillis()): TrackEntity {
+    return TrackEntity(
+        trackId = trackId,
+        trackName = trackName,
+        artistName = artistName,
+        trackTimeMillis = trackTimeMillis,
+        previewUrl = previewUrl,
+        artworkUrl100 = artworkUrl100,
+        collectionName = collectionName,
+        releaseDate = releaseDate,
+        primaryGenreName = primaryGenreName,
+        country = country,
+        timestamp = timestamp
+    )
+}
+
+fun TrackEntity.toTrack(): Track {
+    return Track(
+        trackId = trackId,
+        trackName = trackName,
+        artistName = artistName,
+        trackTimeMillis = trackTimeMillis,
+        previewUrl = previewUrl,
+        artworkUrl100 = artworkUrl100,
+        collectionName = collectionName,
+        releaseDate = releaseDate,
+        primaryGenreName = primaryGenreName,
+        country = country
+    )
+}
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\java\com\example\alexrosh\TracksResponse.kt ---
+
+package com.example.alexrosh
+
+data class TracksResponse(
+    val resultCount: Int,
+    val results: List<Track>
+)
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\bottom_sheet_bg.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners
+        android:topLeftRadius="16dp"
+        android:topRightRadius="16dp" />
+    <solid android:color="@color/yp_background_secondary" />
+</shape>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_add_cover_placeholder.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="56dp"
+    android:height="56dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@color/yp_gray"
+        android:pathData="M21,19V5c0,-1.1 -0.9,-2 -2,-2H5C3.9,3 3,3.9 3,5v14c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2zM8.5,13.5l2.5,3.01L14.5,12l4.5,6H5l3.5,-4.5z" />
+    <path
+        android:fillColor="@color/yp_gray"
+        android:pathData="M19,8h-2V6h-2v2h-2v2h2v2h2v-2h2z" />
+</vector>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_arrow_back.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp"
+    android:height="16dp"
+    android:viewportWidth="16"
+    android:viewportHeight="16">
+    <path
+        android:pathData="M16,7H3.83L9.42,1.41L8,0L0,8L8,16L9.41,14.59L3.83,9H16V7Z"
+        android:fillColor="?attr/colorControlNormal"/>
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_arrow_forward.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="8dp"
+    android:height="14dp"
+    android:viewportWidth="8"
+    android:viewportHeight="14">
+    <path
+        android:pathData="M0,12.7485L1.21337,14L8,7L1.21337,0L0,1.25152L5.57327,7L0,12.7485Z"
+        android:fillColor="@color/yp_gray"/>
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_clear.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:pathData="M12,12m-10,0a10,10 0,1 1,20 0a10,10 0,1 1,-20 0"
+      android:fillColor="#E6E8EB"/>
+  <path
+      android:pathData="M15.5,9.2L14.8,8.5L12,11.3L9.2,8.5L8.5,9.2L11.3,12L8.5,14.8L9.2,15.5L12,12.7L14.8,15.5L15.5,14.8L12.7,12L15.5,9.2Z"
+      android:fillColor="#1A1B22"/>
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_connection_error.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M419.5,88Q431,87 435,93.5L438,103.5L434,112.5L128.5,418Q124.7,422.2 115.5,421Q108.6,419.4 106,413.5L104,405.5L107,397.5L413.5,91L419.5,88Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M239.5,115L273.5,115L274.5,116L284.5,116L285.5,117L299.5,118L330.5,125L351.5,132L355,134.5L325.5,164L321.5,164L305.5,159L282.5,156L281.5,155L243.5,154L242.5,155L223.5,156L202.5,160L161.5,174Q115.7,195.2 82.5,229Q78.1,233.1 68.5,232Q59.4,229.5 55,222.5L52,212.5Q54.3,211.3 53,206.5L56,200.5L64.5,192Q101.1,157.6 150.5,136L181.5,125L197.5,121L212.5,118L226.5,117L227.5,116L238.5,116L239.5,115Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M402.5,159L409.5,162L427.5,175L456,200.5L459,206.5Q457.7,211.3 460,212.5L457,222.5L450.5,229Q446,233.1 436.5,232L426.5,227Q404,203.5 375,186.5L402.5,159Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M238.5,191L273.5,191L274.5,192L292.5,194L294,195.5L259.5,230L242.5,230L241.5,231L228.5,232L200.5,240Q162.1,255.6 134.5,282Q129.8,285.8 119.5,284Q111.6,281.9 108,275.5Q103.8,270.7 105,260.5Q107.1,253.1 112.5,249Q140,224.5 175.5,208L209.5,196L238.5,191Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M347.5,214Q379.1,229.4 403,252.5Q407.9,257.6 407,268.5Q404.9,276.9 398.5,281Q393.7,285.7 382.5,284L374.5,280Q360.8,266.2 343.5,256L323.5,245L319,244L319,242.5L347.5,214Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M289.5,272Q325.8,283.8 349,308.5Q353.4,313.7 352,324.5Q349.6,333.1 342.5,337Q337.4,340.4 327.5,339L322.5,337L304.5,322L290.5,314L273.5,308L256,305.5L289.5,272Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M213.5,275L161.5,328Q158.7,323.9 160,315.5Q162.8,305.8 170.5,301Q188.9,284.9 213.5,275Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M249.5,345Q261.9,343.6 269.5,347Q280.5,351 287,359.5L293,369.5L295,375.5L296,385.5Q293.3,387.2 295,393.5L290,405.5L280.5,416L266.5,423Q259.8,425.3 249.5,424Q233.6,420.4 225,409.5L219,399.5L217,393.5L216,383.5Q218.7,381.8 217,375.5L222,363.5L231.5,353Q238.5,347 249.5,345Z" />
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_dot.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="4dp"
+    android:height="4dp"
+    android:viewportWidth="4"
+    android:viewportHeight="4">
+    <path
+        android:pathData="M2,2m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0"
+        android:fillColor="#AEAFB4"/>
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_launcher_background.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#3DDC84"
+        android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M9,0L9,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,0L19,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M29,0L29,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M39,0L39,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M49,0L49,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M59,0L59,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M69,0L69,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M79,0L79,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M89,0L89,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M99,0L99,108"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,9L108,9"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,19L108,19"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,29L108,29"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,39L108,39"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,49L108,49"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,59L108,59"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,69L108,69"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,79L108,79"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,89L108,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M0,99L108,99"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,29L89,29"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,39L89,39"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,49L89,49"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,59L89,59"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,69L89,69"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M19,79L89,79"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M29,19L29,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M39,19L39,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M49,19L49,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M59,19L59,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M69,19L69,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M79,19L79,89"
+        android:strokeWidth="0.8"
+        android:strokeColor="#33FFFFFF" />
+</vector>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_launcher_foreground.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M31,63.928c0,0 6.4,-11 12.1,-13.1c7.2,-2.6 26,-1.4 26,-1.4l38.1,38.1L107,108.928l-32,-1L31,63.928z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="85.84757"
+                android:endY="92.4963"
+                android:startX="42.9492"
+                android:startY="49.59793"
+                android:type="linear">
+                <item
+                    android:color="#44000000"
+                    android:offset="0.0" />
+                <item
+                    android:color="#00000000"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="nonZero"
+        android:pathData="M65.3,45.828l3.8,-6.6c0.2,-0.4 0.1,-0.9 -0.3,-1.1c-0.4,-0.2 -0.9,-0.1 -1.1,0.3l-3.9,6.7c-6.3,-2.8 -13.4,-2.8 -19.7,0l-3.9,-6.7c-0.2,-0.4 -0.7,-0.5 -1.1,-0.3C38.8,38.328 38.7,38.828 38.9,39.228l3.8,6.6C36.2,49.428 31.7,56.028 31,63.928h46C76.3,56.028 71.8,49.428 65.3,45.828zM43.4,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2c-0.3,-0.7 -0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C45.3,56.528 44.5,57.328 43.4,57.328L43.4,57.328zM64.6,57.328c-0.8,0 -1.5,-0.5 -1.8,-1.2s-0.1,-1.5 0.4,-2.1c0.5,-0.5 1.4,-0.7 2.1,-0.4c0.7,0.3 1.2,1 1.2,1.8C66.5,56.528 65.6,57.328 64.6,57.328L64.6,57.328z"
+        android:strokeWidth="1"
+        android:strokeColor="#00000000" />
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_library.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="20"
+    android:viewportHeight="20">
+    <path
+        android:pathData="M18,0H6C4.9,0 4,0.9 4,2V14C4,15.1 4.9,16 6,16H18C19.1,16 20,15.1 20,14V2C20,0.9 19.1,0 18,0ZM16,5H13V10.5C13,11.88 11.88,13 10.5,13C9.12,13 8,11.88 8,10.5C8,9.12 9.12,8 10.5,8C11.07,8 11.58,8.19 12,8.51V3H16V5ZM2,4H0V18C0,19.1 0.9,20 2,20H16V18H2V4Z"
+        android:fillColor="@color/yp_black"/>
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_like.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M16.5,3C14.76,3 13.09,3.81 12,5.09C10.91,3.81 9.24,3 7.5,3C4.42,3 2,5.42 2,8.5C2,12.28 5.4,15.36 10.55,20.04L12,21.35L13.45,20.03C18.6,15.36 22,12.28 22,8.5C22,5.42 19.58,3 16.5,3zM12.1,18.55L12,18.65L11.9,18.55C7.14,14.24 4,11.39 4,8.5C4,6.5 5.5,5 7.5,5C9.04,5 10.54,5.99 11.07,7.36H12.94C13.46,5.99 14.96,5 16.5,5C18.5,5 20,6.5 20,8.5C20,11.39 16.86,14.24 12.1,18.55z" />
+</vector>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_like_filled.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="22dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#F56B6C"
+        android:pathData="M12,21.35L10.55,20.03C5.4,15.36 2,12.28 2,8.5C2,5.42 4.42,3 7.5,3C9.24,3 10.91,3.81 12,5.09C13.09,3.81 14.76,3 16.5,3C19.58,3 22,5.42 22,8.5C22,12.28 18.6,15.36 13.45,20.04L12,21.35Z" />
+</vector>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_nothing_found.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M37.5,6Q61.4,5.6 70,20.5Q76.6,28.9 76,44.5Q74,55.5 68,62.5L93,88.5L87.5,93L62.5,68L60.5,68Q52.8,74.8 37.5,74Q21.4,71.1 14,59.5Q7.4,51.1 8,35.5Q10.9,19.4 22.5,12Q28.5,7.5 37.5,6ZM37,10L25,15Q15,22 12,35Q11,51 18,59Q25,67 37,70Q53,71 61,64Q69,57 72,46L72,35L67,23Q61,15 52,11L37,10Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M28.5,28Q33.3,27.3 34,30.5Q34.8,35.3 31.5,36Q26.8,36.8 26,33.5Q25.3,28.8 28.5,28Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M52.5,28Q57.3,27.3 58,30.5Q58.8,35.3 55.5,36Q50.8,36.8 50,33.5Q49.3,28.8 52.5,28Z" />
+    <path
+        android:fillColor="?attr/colorControlNormal"
+        android:pathData="M39.5,46Q49.7,45.8 54,51.5L52.5,54L45.5,50L38.5,50L31.5,54L30,51.5L39.5,46Z" />
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_pause.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="46dp"
+    android:height="46dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M7,5h4v14H7z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M13,5h4v14h-4z" />
+</vector>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_play.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="46dp"
+    android:height="46dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M8,5v14l11,-7z" />
+</vector>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_playlist_add.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="23"
+    android:viewportHeight="23">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M2.3,4.6H0V20.7C0,21.965 1.035,23 2.3,23H18.4V20.7H2.3V4.6ZM20.7,0H6.9C5.635,0 4.6,1.035 4.6,2.3V16.1C4.6,17.365 5.635,18.4 6.9,18.4H20.7C21.965,18.4 23,17.365 23,16.1V2.3C23,1.035 21.965,0 20.7,0ZM19.55,10.35H14.95V14.95H12.65V10.35H8.05V8.05H12.65V3.45H14.95V8.05H19.55V10.35Z" />
+</vector>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_search.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="19dp"
+    android:height="19dp"
+    android:viewportWidth="19"
+    android:viewportHeight="19">
+    <path
+        android:pathData="M13.5792,11.9497H12.721L12.4168,11.6564C13.4814,10.418 14.1224,8.81018 14.1224,7.06118C14.1224,3.16124 10.9611,0 7.06118,0C3.16124,0 0,3.16124 0,7.06118C0,10.9611 3.16124,14.1224 7.06118,14.1224C8.81018,14.1224 10.418,13.4814 11.6564,12.4168L11.9497,12.721V13.5792L17.3814,19L19,17.3814L13.5792,11.9497ZM7.06118,11.9497C4.3562,11.9497 2.17267,9.76615 2.17267,7.06118C2.17267,4.3562 4.3562,2.17267 7.06118,2.17267C9.76615,2.17267 11.9497,4.3562 11.9497,7.06118C11.9497,9.76615 9.76615,11.9497 7.06118,11.9497Z"
+        android:fillColor="@color/yp_black"/>
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_settings.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="19dp"
+    android:height="20dp"
+    android:viewportWidth="19"
+    android:viewportHeight="20">
+    <path
+        android:pathData="M16.478,10.54C16.518,10.24 16.538,9.93 16.538,9.6C16.538,9.28 16.518,8.96 16.468,8.66L18.498,7.08C18.678,6.94 18.728,6.67 18.618,6.47L16.698,3.15C16.578,2.93 16.328,2.86 16.108,2.93L13.718,3.89C13.218,3.51 12.688,3.19 12.098,2.95L11.738,0.41C11.698,0.17 11.498,0 11.258,0H7.418C7.178,0 6.988,0.17 6.948,0.41L6.588,2.95C5.998,3.19 5.458,3.52 4.968,3.89L2.578,2.93C2.358,2.85 2.108,2.93 1.988,3.15L0.0780003,6.47C-0.0419997,6.68 -0.00199977,6.94 0.198,7.08L2.228,8.66C2.178,8.96 2.138,9.29 2.138,9.6C2.138,9.91 2.158,10.24 2.208,10.54L0.178,12.12C-0.00199975,12.26 -0.0519996,12.53 0.0580004,12.73L1.978,16.05C2.098,16.27 2.348,16.34 2.568,16.27L4.958,15.31C5.458,15.69 5.988,16.01 6.578,16.25L6.938,18.79C6.988,19.03 7.178,19.2 7.418,19.2H11.258C11.498,19.2 11.698,19.03 11.728,18.79L12.088,16.25C12.678,16.01 13.218,15.69 13.708,15.31L16.098,16.27C16.318,16.35 16.568,16.27 16.688,16.05L18.608,12.73C18.728,12.51 18.678,12.26 18.488,12.12L16.478,10.54ZM9.338,13.2C7.358,13.2 5.738,11.58 5.738,9.6C5.738,7.62 7.358,6 9.338,6C11.318,6 12.938,7.62 12.938,9.6C12.938,11.58 11.318,13.2 9.338,13.2Z"
+        android:fillColor="@color/yp_black"/>
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_share.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp"
+    android:height="18dp"
+    android:viewportWidth="16"
+    android:viewportHeight="18">
+    <path
+        android:pathData="M13.3333,12.7229C12.6578,12.7229 12.0533,12.994 11.5911,13.4187L5.25333,9.66867C5.29778,9.46084 5.33333,9.25301 5.33333,9.03614C5.33333,8.81928 5.29778,8.61145 5.25333,8.40361L11.52,4.68976C12,5.14157 12.6311,5.42169 13.3333,5.42169C14.8089,5.42169 16,4.21084 16,2.71084C16,1.21084 14.8089,0 13.3333,0C11.8578,0 10.6667,1.21084 10.6667,2.71084C10.6667,2.92771 10.7022,3.13554 10.7467,3.34337L4.48,7.05723C4,6.60542 3.36889,6.3253 2.66667,6.3253C1.19111,6.3253 0,7.53614 0,9.03614C0,10.5361 1.19111,11.747 2.66667,11.747C3.36889,11.747 4,11.4669 4.48,11.0151L10.8089,14.7741C10.7644,14.9639 10.7378,15.1627 10.7378,15.3614C10.7378,16.8163 11.9022,18 13.3333,18C14.7644,18 15.9289,16.8163 15.9289,15.3614C15.9289,13.9066 14.7644,12.7229 13.3333,12.7229Z"
+        android:fillColor="?attr/colorControlNormal"/>
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\ic_support.xml ---
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="18dp"
+    android:viewportWidth="20"
+    android:viewportHeight="18">
+    <path
+        android:pathData="M19,9.22C19,3.73 14.74,0 10,0C5.31,0 1,3.65 1,9.28C0.4,9.62 0,10.26 0,11V13C0,14.1 0.9,15 2,15H3V8.9C3,5.03 6.13,1.9 10,1.9C13.87,1.9 17,5.03 17,8.9V16H9V18H17C18.1,18 19,17.1 19,16V14.78C19.59,14.47 20,13.86 20,13.14V10.84C20,10.14 19.59,9.53 19,9.22Z"
+        android:fillColor="?attr/colorControlNormal"/>
+    <path
+        android:pathData="M7,11C7.552,11 8,10.552 8,10C8,9.448 7.552,9 7,9C6.448,9 6,9.448 6,10C6,10.552 6.448,11 7,11Z"
+        android:fillColor="?attr/colorControlNormal"/>
+    <path
+        android:pathData="M13,11C13.552,11 14,10.552 14,10C14,9.448 13.552,9 13,9C12.448,9 12,9.448 12,10C12,10.552 12.448,11 13,11Z"
+        android:fillColor="?attr/colorControlNormal"/>
+    <path
+        android:pathData="M16,8.03C15.52,5.18 13.04,3 10.05,3C7.02,3 3.76,5.51 4.02,9.45C6.49,8.44 8.35,6.24 8.88,3.56C10.19,6.19 12.88,8 16,8.03Z"
+        android:fillColor="?attr/colorControlNormal"/>
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\placeholder.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="213dp"
+    android:viewportWidth="642"
+    android:viewportHeight="569">
+
+    <path
+        android:fillColor="#AEAFB4"
+        android:pathData="M181.5,52L195.5,52L212.5,57Q226.8,63.8 236,75.5L246,94.5L249,107.5L249,121.5L250,122.5L249,123.5L249,135.5L247,145.5L241,162.5L233,177.5L202,224.5L178,271.5L170,297.5L170,315.5Q171.5,324.5 177.5,329L186.5,330Q198.8,324.8 206,314.5L271,236.5L288.5,219Q310.7,198.2 340.5,185L363.5,178L379.5,177L380.5,176L382.5,177L384.5,177L386.5,176L387.5,177L398.5,177L408.5,179L420.5,183Q436.6,189.9 448,201.5L450,204.5Q475.6,231.2 480,278L482.5,277L484.5,278L486.5,278L488.5,277L490.5,278L492.5,278L494.5,277L496.5,278L498.5,278L500.5,277L502.5,278L504.5,278L506.5,277L508.5,278L510.5,278L512.5,277L514.5,278L516.5,278L518.5,277L520.5,278L522.5,278L524.5,277L526.5,278L528.5,278L530.5,277L532.5,278L534.5,278L536.5,277L539,278L539,337L481.5,337L479,343.5L479,351.5L475,374.5L464,409.5Q451.1,440.6 427.5,461Q415.4,471.4 399.5,478L382.5,483L358.5,484L347.5,482L333.5,477Q318.5,469.5 308,457.5Q299,447.5 294,433.5L291,421.5L290,406.5L294,384.5L305,358.5Q317,337 334.5,321Q353.9,303.4 379.5,292Q397.7,283.9 420,281L418,266.5L415,256.5L406.5,245L393.5,239L376.5,237L363.5,240L344.5,251Q324,266 308,285.5L263,340.5L241.5,364Q228.3,377.8 209.5,386L191.5,390L177.5,390L166.5,388L149.5,381Q136.8,373.8 128,362.5Q118.8,351.2 114,335.5L110,313.5L110,295.5L116,267.5L125,243.5L148,199.5L184,144.5L191,128.5L191,120.5L188.5,117L182.5,115L169.5,122L144.5,145L117.5,118L116,118Q117.1,115.3 114.5,116L103,103.5L125.5,80Q146.8,59.3 181.5,52ZM418,342Q393,349 376,364L358,385Q352,393 350,406Q349,416 354,420Q358,425 366,426Q381,426 389,418Q402,407 409,389L414,374L419,350L419,343L418,342Z" />
+
+</vector>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\playlist_cover_dashed_border.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="2dp" />
+    <solid android:color="@android:color/transparent" />
+    <stroke
+        android:width="1dp"
+        android:color="@color/yp_light_gray"
+        android:dashWidth="10dp"
+        android:dashGap="8dp" />
+</shape>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\playlist_cover_placeholder_bg.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <corners android:radius="8dp" />
+    <solid android:color="@color/yp_light_gray" />
+</shape>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\round_button_primary.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <size
+        android:width="@dimen/audio_player_play_button_size"
+        android:height="@dimen/audio_player_play_button_size" />
+    <solid android:color="@color/audio_player_play_button_bg" />
+</shape>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\round_button_secondary.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <size
+        android:width="@dimen/audio_player_side_button_size"
+        android:height="@dimen/audio_player_side_button_size" />
+    <solid android:color="@color/audio_player_secondary_button_bg" />
+</shape>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\search_edittext_background.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/yp_search_background" />
+    <corners android:radius="8dp" />
+</shape>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\drawable\white_rounded_background.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/white" />
+    <corners android:radius="15dp" />
+</shape>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_audio_player.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/yp_background_secondary"
+    tools:context=".AudioPlayerActivity">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/start_guideline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_begin="@dimen/audio_player_side_margin" />
+
+    <androidx.constraintlayout.widget.Guideline
+        android:id="@+id/end_guideline"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layout_constraintGuide_end="@dimen/audio_player_side_margin" />
+
+    <ImageView
+        android:id="@+id/back_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@null"
+        android:contentDescription="@string/back_button_description"
+        android:stateListAnimator="@null"
+        android:src="@drawable/ic_arrow_back"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageView
+        android:id="@+id/cover_artwork"
+        android:layout_width="@dimen/audio_player_cover_size"
+        android:layout_height="@dimen/audio_player_cover_size"
+        android:layout_marginTop="24dp"
+        android:contentDescription="@string/audio_player_cover_description"
+        android:scaleType="centerCrop"
+        app:layout_constraintEnd_toEndOf="@id/end_guideline"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toBottomOf="@id/back_button"
+        tools:src="@drawable/placeholder" />
+
+    <TextView
+        android:id="@+id/track_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="22sp"
+        app:fontFamily="@font/ys_display_medium"
+        app:layout_constraintEnd_toEndOf="@id/end_guideline"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toBottomOf="@id/cover_artwork"
+        tools:text="Smells Like Teen Spirit" />
+
+    <TextView
+        android:id="@+id/artist_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="14sp"
+        app:fontFamily="@font/ys_display_regular"
+        app:layout_constraintEnd_toEndOf="@id/end_guideline"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toBottomOf="@id/track_name"
+        tools:text="Nirvana" />
+
+    <ImageButton
+        android:id="@+id/add_to_playlist_button"
+        android:layout_width="@dimen/audio_player_side_button_size"
+        android:layout_height="@dimen/audio_player_side_button_size"
+        android:layout_marginEnd="@dimen/audio_player_controls_inner_spacing"
+        android:background="@drawable/round_button_secondary"
+        android:contentDescription="@string/audio_player_add_to_playlist_icon_description"
+        android:scaleType="centerInside"
+        android:stateListAnimator="@null"
+        app:layout_constraintBottom_toBottomOf="@id/play_button"
+        app:layout_constraintEnd_toStartOf="@id/play_button"
+        app:layout_constraintHorizontal_chainStyle="spread"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toTopOf="@id/play_button"
+        tools:src="@drawable/ic_playlist_add" />
+
+    <ImageButton
+        android:id="@+id/play_button"
+        android:layout_width="@dimen/audio_player_play_button_size"
+        android:layout_height="@dimen/audio_player_play_button_size"
+        android:layout_marginTop="24dp"
+        android:background="@drawable/round_button_primary"
+        android:contentDescription="@string/audio_player_play_icon_description"
+        android:scaleType="centerInside"
+        android:stateListAnimator="@null"
+        app:layout_constraintEnd_toStartOf="@id/like_button"
+        app:layout_constraintStart_toEndOf="@id/add_to_playlist_button"
+        app:layout_constraintTop_toBottomOf="@id/artist_name"
+        tools:src="@drawable/ic_play" />
+
+    <ImageButton
+        android:id="@+id/like_button"
+        android:layout_width="@dimen/audio_player_side_button_size"
+        android:layout_height="@dimen/audio_player_side_button_size"
+        android:layout_marginStart="@dimen/audio_player_controls_inner_spacing"
+        android:background="@drawable/round_button_secondary"
+        android:contentDescription="@string/audio_player_like_icon_description"
+        android:scaleType="centerInside"
+        android:stateListAnimator="@null"
+        app:layout_constraintBottom_toBottomOf="@id/play_button"
+        app:layout_constraintEnd_toEndOf="@id/end_guideline"
+        app:layout_constraintStart_toEndOf="@id/play_button"
+        app:layout_constraintTop_toTopOf="@id/play_button"
+        tools:src="@drawable/ic_like" />
+
+    <TextView
+        android:id="@+id/current_time_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/audio_player_current_time_default"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="16sp"
+        app:fontFamily="@font/ys_display_regular"
+        app:layout_constraintEnd_toEndOf="@id/play_button"
+        app:layout_constraintStart_toStartOf="@id/play_button"
+        app:layout_constraintTop_toBottomOf="@id/play_button" />
+
+    <TextView
+        android:id="@+id/duration_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/audio_player_duration_label"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_medium"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toBottomOf="@id/current_time_value" />
+
+    <TextView
+        android:id="@+id/duration_value"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_regular"
+        app:layout_constraintBaseline_toBaselineOf="@id/duration_label"
+        app:layout_constraintEnd_toEndOf="@id/end_guideline"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        tools:text="5:01" />
+
+    <TextView
+        android:id="@+id/year_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="17dp"
+        android:text="@string/audio_player_year_label"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_medium"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toBottomOf="@id/duration_label" />
+
+    <TextView
+        android:id="@+id/year_value"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_regular"
+        app:layout_constraintBaseline_toBaselineOf="@id/year_label"
+        app:layout_constraintEnd_toEndOf="@id/end_guideline"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        tools:text="1991" />
+
+    <TextView
+        android:id="@+id/genre_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="17dp"
+        android:text="@string/audio_player_genre_label"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_medium"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toBottomOf="@id/year_label" />
+
+    <TextView
+        android:id="@+id/genre_value"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_regular"
+        app:layout_constraintBaseline_toBaselineOf="@id/genre_label"
+        app:layout_constraintEnd_toEndOf="@id/end_guideline"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        tools:text="Rock" />
+
+    <TextView
+        android:id="@+id/country_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="17dp"
+        android:text="@string/audio_player_country_label"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_medium"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toBottomOf="@id/genre_label" />
+
+    <TextView
+        android:id="@+id/country_value"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_regular"
+        app:layout_constraintBaseline_toBaselineOf="@id/country_label"
+        app:layout_constraintEnd_toEndOf="@id/end_guideline"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        tools:text="USA" />
+
+    <TextView
+        android:id="@+id/album_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="17dp"
+        android:text="@string/audio_player_album_label"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_medium"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        app:layout_constraintTop_toBottomOf="@id/country_label" />
+
+    <TextView
+        android:id="@+id/album_value"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="13sp"
+        app:fontFamily="@font/ys_display_regular"
+        app:layout_constraintBaseline_toBaselineOf="@id/album_label"
+        app:layout_constraintEnd_toEndOf="@id/end_guideline"
+        app:layout_constraintStart_toStartOf="@id/start_guideline"
+        tools:text="Nevermind" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <LinearLayout
+        android:id="@+id/playlist_bottom_sheet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bottom_sheet_bg"
+        android:elevation="8dp"
+        android:orientation="vertical"
+        app:behavior_hideable="true"
+        app:behavior_peekHeight="@dimen/playlist_bottom_sheet_peek_height"
+        app:layout_behavior="@string/bottom_sheet_behavior">
+
+        <View
+            android:layout_width="40dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:background="@color/yp_gray" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="@string/audio_player_bottom_sheet_title"
+            android:textColor="@color/yp_text_primary"
+            android:textSize="19sp"
+            app:fontFamily="@font/ys_display_medium" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/new_playlist_button"
+            style="@style/SearchHistoryClearButton"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:text="@string/library_new_playlist" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/playlists_bottom_sheet_recycler"
+            android:layout_width="match_parent"
+            android:layout_height="300dp"
+            android:layout_marginTop="8dp"
+            tools:itemCount="4"
+            tools:listitem="@layout/playlist_bottom_sheet_item" />
+    </LinearLayout>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_library.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/yp_background_secondary"
+    android:orientation="vertical"
+    tools:context=".LibraryActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
+
+        <ImageView
+            android:id="@+id/back_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/back_button_description"
+            android:src="@drawable/ic_arrow_back" />
+
+        <TextView
+            style="@style/SettingsScreenHeader"
+            android:text="@string/library" />
+    </LinearLayout>
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/library_tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        app:tabIndicatorColor="@color/yp_text_primary"
+        app:tabIndicatorFullWidth="false"
+        app:tabRippleColor="@android:color/transparent"
+        app:tabTextAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
+        app:tabTextColor="@color/yp_text_primary">
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/favorite_tracks_title" />
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/library_playlists_tab" />
+    </com.google.android.material.tabs.TabLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:id="@+id/playlists_content"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/new_playlist_button"
+                style="@style/SearchHistoryClearButton"
+                android:layout_width="wrap_content"
+                android:layout_height="35dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="16dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="@string/library_new_playlist" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/playlists_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginTop="16dp"
+                android:paddingHorizontal="8dp"
+                android:visibility="gone"
+                tools:itemCount="4"
+                tools:listitem="@layout/playlist_grid_item" />
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/favorite_tracks_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            tools:itemCount="5"
+            tools:listitem="@layout/track_view" />
+
+        <LinearLayout
+            android:id="@+id/empty_favorite_tracks_placeholder"
+            style="@style/SearchPlaceholder"
+            tools:visibility="visible">
+
+            <ImageView
+                style="@style/SearchPlaceholder.Icon"
+                android:contentDescription="@string/favorite_tracks_empty_message"
+                android:src="@drawable/ic_nothing_found" />
+
+            <TextView
+                style="@style/SearchPlaceholder.Title"
+                android:text="@string/favorite_tracks_empty_message" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/empty_playlists_placeholder"
+            style="@style/SearchPlaceholder"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <ImageView
+                style="@style/SearchPlaceholder.Icon"
+                android:contentDescription="@string/library_empty_playlists_message"
+                android:src="@drawable/ic_nothing_found" />
+
+            <TextView
+                style="@style/SearchPlaceholder.Title"
+                android:text="@string/library_empty_playlists_message" />
+        </LinearLayout>
+    </FrameLayout>
+
+</LinearLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_main.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/yp_background_main"
+        android:orientation="vertical">
+
+        <!-- РљРѕРЅС‚РµР№РЅРµСЂ РґР»СЏ Р·Р°РіРѕР»РѕРІРєР° СЃ РїСЂР°РІРёР»СЊРЅС‹РјРё РѕС‚СЃС‚СѓРїР°РјРё -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="20dp"
+            android:paddingVertical="16dp">
+
+            <TextView
+                style="@style/MainScreenHeader"
+                android:layout_gravity="start"
+                android:text="@string/main_title" />
+        </LinearLayout>
+
+        <!-- РљРѕРЅС‚РµР№РЅРµСЂ РґР»СЏ РєРЅРѕРїРѕРє СЃ РїСЂР°РІРёР»СЊРЅС‹РјРё РѕС‚СЃС‚СѓРїР°РјРё -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingHorizontal="20dp"
+            android:paddingVertical="16dp">
+
+            <LinearLayout
+                android:id="@+id/search_btn"
+                style="@style/MainScreenButton">
+
+                <ImageView
+                    style="@style/MainScreenButtonIcon"
+                    android:src="@drawable/ic_search"
+                    android:contentDescription="@string/search"/>
+
+                <TextView
+                    style="@style/MainScreenButtonText"
+                    android:text="@string/search" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/library_btn"
+                style="@style/MainScreenButton"
+                android:layout_marginTop="16dp">
+
+                <ImageView
+                    style="@style/MainScreenButtonIcon"
+                    android:src="@drawable/ic_library"
+                    android:contentDescription="@string/library"/>
+
+                <TextView
+                    style="@style/MainScreenButtonText"
+                    android:text="@string/library" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/settings_btn"
+                style="@style/MainScreenButton"
+                android:layout_marginTop="16dp">
+
+                <ImageView
+                    style="@style/MainScreenButtonIcon"
+                    android:src="@drawable/ic_settings"
+                    android:contentDescription="@string/main_settings"/>
+
+                <TextView
+                    style="@style/MainScreenButtonText"
+                    android:text="@string/main_settings" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_new_playlist.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/yp_background_secondary"
+    android:orientation="vertical"
+    tools:context=".NewPlaylistActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
+
+        <ImageView
+            android:id="@+id/back_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/back_button_description"
+            android:src="@drawable/ic_arrow_back" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:textColor="@color/yp_text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            app:fontFamily="@font/ys_display_medium"
+            android:text="@string/new_playlist_title" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp">
+
+                <FrameLayout
+                    android:id="@+id/cover_picker"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:background="@drawable/playlist_cover_dashed_border"
+                    android:clickable="true"
+                    android:focusable="true"
+                    app:layout_constraintDimensionRatio="1:1"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent">
+
+                    <ImageView
+                        android:id="@+id/cover_image"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="@string/playlist_cover_content_description"
+                        android:scaleType="centerCrop"
+                        tools:src="@drawable/placeholder" />
+
+                    <ImageView
+                        android:id="@+id/cover_hint"
+                        android:layout_width="56dp"
+                        android:layout_height="56dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/new_playlist_cover_hint"
+                        android:src="@drawable/ic_add_cover_placeholder" />
+                </FrameLayout>
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:hint="@string/new_playlist_name_hint"
+                app:boxBackgroundMode="outline"
+                app:boxCornerRadiusBottomEnd="8dp"
+                app:boxCornerRadiusBottomStart="8dp"
+                app:boxCornerRadiusTopEnd="8dp"
+                app:boxCornerRadiusTopStart="8dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/name_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textCapSentences"
+                    android:maxLines="1"
+                    android:paddingVertical="16dp"
+                    android:textColor="@color/yp_text_primary"
+                    android:textSize="16sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="@string/new_playlist_description_hint"
+                app:boxBackgroundMode="outline"
+                app:boxCornerRadiusBottomEnd="8dp"
+                app:boxCornerRadiusBottomStart="8dp"
+                app:boxCornerRadiusTopEnd="8dp"
+                app:boxCornerRadiusTopStart="8dp">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/description_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textCapSentences"
+                    android:maxLines="1"
+                    android:paddingVertical="16dp"
+                    android:textColor="@color/yp_text_primary"
+                    android:textSize="16sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/create_button"
+        android:layout_width="match_parent"
+        android:layout_height="58dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="16dp"
+        android:backgroundTint="@color/yp_blue"
+        android:insetTop="0dp"
+        android:insetBottom="0dp"
+        android:textAllCaps="false"
+        android:textColor="@color/white"
+        android:enabled="false"
+        app:cornerRadius="12dp"
+        android:text="@string/new_playlist_create_button" />
+
+</LinearLayout>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_search.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/yp_background_secondary"
+    android:orientation="vertical"
+    tools:context=".SearchActivity">
+
+    <!-- Р—Р°РіРѕР»РѕРІРѕРє (Р±РµР· РёР·РјРµРЅРµРЅРёР№) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
+
+        <ImageView
+            android:id="@+id/back_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/back_button_description"
+            android:src="@drawable/ic_arrow_back" />
+
+        <TextView
+            style="@style/SettingsScreenHeader"
+            android:text="@string/search" />
+    </LinearLayout>
+
+    <!-- РџРѕР»Рµ РїРѕРёСЃРєР° (Р±РµР· РёР·РјРµРЅРµРЅРёР№) -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp">
+
+        <EditText
+            android:id="@+id/search_edit_text"
+            style="@style/SearchEditText" />
+
+        <ImageView
+            android:id="@+id/clear_icon"
+            style="@style/SearchClearIcon"
+            android:contentDescription="@string/clear_search_query" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- RecyclerView РґР»СЏ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РїРѕРёСЃРєР° (Р±РµР· РёР·РјРµРЅРµРЅРёР№) -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/track_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            tools:itemCount="5"
+            tools:listitem="@layout/track_view" />
+
+        <!-- Р‘Р»РѕРє РёСЃС‚РѕСЂРёРё РїРѕРёСЃРєР° (Р±РµР· РёР·РјРµРЅРµРЅРёР№) -->
+        <LinearLayout
+            android:id="@+id/search_history_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="top|center_horizontal"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                style="@style/SearchHistoryHeader"
+                android:text="Р’С‹ РёСЃРєР°Р»Рё" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/history_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                tools:itemCount="3"
+                tools:listitem="@layout/track_view" />
+
+            <Button
+                android:id="@+id/clear_history_button"
+                style="@style/SearchHistoryClearButton" />
+        </LinearLayout>
+
+        <!-- РџР»РµР№СЃС…РѕР»РґРµСЂ "РќРёС‡РµРіРѕ РЅРµ РЅР°С€Р»РѕСЃСЊ" -->
+        <LinearLayout
+            android:id="@+id/nothing_found_placeholder"
+            style="@style/SearchPlaceholder"
+            tools:visibility="gone">
+
+            <ImageView
+                android:id="@+id/nothing_found_icon"
+                style="@style/SearchPlaceholder.Icon"
+                android:visibility="visible"
+                android:src="@drawable/ic_nothing_found"
+                android:contentDescription="@string/nothing_found"/>
+
+            <TextView
+                style="@style/SearchPlaceholder.Title"
+                android:text="@string/nothing_found" />
+        </LinearLayout>
+
+        <!-- РџР»РµР№СЃС…РѕР»РґРµСЂ "РџСЂРѕР±Р»РµРјС‹ СЃРѕ СЃРІСЏР·СЊСЋ" -->
+        <LinearLayout
+            android:id="@+id/connection_error_placeholder"
+            style="@style/SearchPlaceholder"
+            tools:visibility="gone">
+
+            <ImageView
+                android:id="@+id/connection_error_icon"
+                style="@style/SearchPlaceholder.Icon"
+                android:visibility="visible"
+                android:src="@drawable/ic_connection_error"
+                android:contentDescription="@string/connection_problems"/>
+
+            <TextView
+                style="@style/SearchPlaceholder.Title"
+                android:text="@string/connection_problems" />
+
+            <TextView
+                style="@style/SearchPlaceholder.Message"
+                android:text="@string/connection_problems_message" />
+
+            <Button
+                android:id="@+id/update_button"
+                style="@style/SearchHistoryClearButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/update" />
+        </LinearLayout>
+
+        <!-- РџСЂРѕРіСЂРµСЃСЃ-Р±Р°СЂ -->
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            style="@style/SearchProgressBar"
+            tools:visibility="gone"/>
+
+    </FrameLayout>
+
+</LinearLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_settings.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/settings"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".SettingsActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/yp_background_secondary"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingVertical="14dp">
+
+            <ImageView
+                android:id="@+id/back_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/back_button_description"
+                android:src="@drawable/ic_arrow_back" />
+
+            <TextView
+                style="@style/SettingsScreenHeader"
+                android:text="@string/settings_title" />
+
+        </LinearLayout>
+
+        <FrameLayout style="@style/SettingsScreenMenuItem">
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <TextView
+                style="@style/SettingsMenuItemText"
+                android:text="@string/dark_theme" />
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/theme_switch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|end" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/share_btn"
+            style="@style/SettingsScreenMenuItem">
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <TextView
+                style="@style/SettingsMenuItemText"
+                android:text="@string/share_app" />
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <ImageView
+                style="@style/SettingsMenuItemIcon"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_share" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/support_btn"
+            style="@style/SettingsScreenMenuItem">
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <TextView
+                style="@style/SettingsMenuItemText"
+                android:text="@string/write_to_support" />
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <ImageView
+                style="@style/SettingsMenuItemIcon"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_support" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/agreement_btn"
+            style="@style/SettingsScreenMenuItem">
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <TextView
+                style="@style/SettingsMenuItemText"
+                android:text="@string/user_agreement" />
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <ImageView
+                style="@style/SettingsMenuItemIcon"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_arrow_forward" />
+        </FrameLayout>
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\playlist_bottom_sheet_item.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:minHeight="72dp"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="8dp">
+
+    <ImageView
+        android:id="@+id/playlist_cover"
+        android:layout_width="45dp"
+        android:layout_height="45dp"
+        android:background="@drawable/playlist_cover_placeholder_bg"
+        android:contentDescription="@string/playlist_cover_content_description"
+        android:scaleType="centerCrop"
+        tools:src="@drawable/placeholder" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/playlist_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/yp_text_primary"
+            android:textSize="16sp"
+            tools:text="Road Trip" />
+
+        <TextView
+            android:id="@+id/playlist_track_count"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/yp_gray"
+            android:textSize="11sp"
+            tools:text="7 С‚СЂРµРєРѕРІ" />
+    </LinearLayout>
+
+</LinearLayout>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\playlist_grid_item.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="8dp"
+    android:orientation="vertical">
+
+    <ImageView
+        android:id="@+id/playlist_cover"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/playlist_grid_image_size"
+        android:background="@drawable/playlist_cover_placeholder_bg"
+        android:contentDescription="@string/playlist_cover_content_description"
+        android:scaleType="centerCrop"
+        tools:src="@drawable/placeholder" />
+
+    <TextView
+        android:id="@+id/playlist_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:maxLines="2"
+        android:textColor="@color/yp_text_primary"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        tools:text="The Beatles collection" />
+
+    <TextView
+        android:id="@+id/playlist_track_count"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/yp_gray"
+        android:textSize="13sp"
+        tools:text="12 С‚СЂРµРєРѕРІ" />
+
+</LinearLayout>
+
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\track_view.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="61dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <ImageView
+        android:id="@+id/track_artwork"
+        android:layout_width="45dp"
+        android:layout_height="45dp"
+        android:layout_marginStart="13dp"
+        tools:src="@drawable/placeholder" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/track_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/yp_text_primary"
+            android:textSize="16sp"
+            app:fontFamily="@font/ys_display_regular"
+            tools:text="Yesterday (Remastered 2009)" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/track_artist_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/yp_gray"
+                android:textSize="11sp"
+                app:fontFamily="@font/ys_display_regular"
+                tools:text="The Beatles" />
+
+            <ImageView
+                android:layout_width="3dp"
+                android:layout_height="3dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginHorizontal="5dp"
+                android:src="@drawable/ic_dot" />
+
+            <TextView
+                android:id="@+id/track_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/yp_gray"
+                android:textSize="11sp"
+                app:fontFamily="@font/ys_display_regular"
+                tools:text="2:55" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/track_arrow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:src="@drawable/ic_arrow_forward" />
+</LinearLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\colors.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Р‘Р°Р·РѕРІС‹Рµ С†РІРµС‚Р°, РЅРµ РјРµРЅСЏСЋС‚СЃСЏ -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="yp_gray">#AEAFB4</color>
+    <color name="yp_blue">#3772E7</color>
+    <color name="yp_black">#1A1B22</color>
+    <color name="yp_light_gray">#E6E8EB</color>
+
+    <!-- РўРµРјР°С‚РёС‡РµСЃРєРёРµ С†РІРµС‚Р° РґР»СЏ СЃРІРµС‚Р»РѕР№ С‚РµРјС‹ -->
+    <color name="yp_background_main">@color/yp_blue</color>
+    <color name="yp_background_secondary">@color/white</color>
+    <color name="yp_text_primary">@color/black</color>
+    <color name="yp_text_on_dark_background">@color/white</color>
+    <color name="yp_icon_primary">@color/black</color>
+    <color name="yp_search_background">@color/yp_light_gray</color>
+    <color name="audio_player_secondary_button_bg">#E6E8EB</color>
+    <color name="audio_player_play_button_bg">@color/yp_black</color>
+    <color name="audio_player_icon_on_primary">@color/white</color>
+    <color name="audio_player_icon_on_secondary">@color/yp_gray</color>
+
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\dimens.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="track_artwork_corner_radius">2dp</dimen>
+    <dimen name="audio_player_side_margin">16dp</dimen>
+    <dimen name="audio_player_cover_size">220dp</dimen>
+    <dimen name="audio_player_button_height">36dp</dimen>
+    <dimen name="audio_player_circle_button_size">56dp</dimen>
+    <dimen name="audio_player_control_button_size">56dp</dimen>
+    <dimen name="audio_player_side_button_size">56dp</dimen>
+    <dimen name="audio_player_play_button_size">72dp</dimen>
+    <dimen name="audio_player_controls_inner_spacing">12dp</dimen>
+    <dimen name="playlist_grid_image_size">160dp</dimen>
+    <dimen name="playlist_bottom_sheet_peek_height">420dp</dimen>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\strings.xml ---
+
+<resources>
+    <string name="app_name">AlexRosh</string>
+    <string name="settings_title">РќР°СЃС‚СЂРѕР№РєРё</string>
+    <string name="dark_theme">РўРµРјРЅР°СЏ С‚РµРјР°</string>
+    <string name="share_app">РџРѕРґРµР»РёС‚СЊСЃСЏ РїСЂРёР»РѕР¶РµРЅРёРµРј</string>
+    <string name="write_to_support">РќР°РїРёСЃР°С‚СЊ РІ РїРѕРґРґРµСЂР¶РєСѓ</string>
+    <string name="user_agreement">РџРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРѕРµ СЃРѕРіР»Р°С€РµРЅРёРµ</string>
+    <string name="back_button_description">РќР°Р·Р°Рґ</string>
+    <string name="main_title">Playlist maker</string>
+    <string name="search">РџРѕРёСЃРє</string>
+    <string name="library">РњРµРґРёР°С‚РµРєР°</string>
+    <string name="favorite_tracks_title">РР·Р±СЂР°РЅРЅС‹Рµ С‚СЂРµРєРё</string>
+    <string name="favorite_tracks_empty_message">Р’Р°С€Р° РјРµРґРёР°С‚РµРєР° РїСѓСЃС‚Р°</string>
+    <string name="main_settings">РќР°СЃС‚СЂРѕР№РєР°</string>
+
+    <string name="share_message">РЇ РёСЃРїРѕР»СЊР·СѓСЋ РїСЂРёР»РѕР¶РµРЅРёРµ Р РѕС‰СѓРїРєРёРЅР° РђР»РµРєСЃРµСЏ РРЎ-221</string>
+    <string name="support_email">AlexseyRoshupkin@yandex.ru</string>
+    <string name="support_subject">РЎРѕРѕР±С‰РµРЅРёРµ СЂР°Р·СЂР°Р±РѕС‚С‡РёРєР°Рј Playlist Maker</string>
+    <string name="support_body">Р Р°Р±РѕС‚Р°РµС‚!!</string>
+    <string name="agreement_url">https://vivt.ru/</string>
+    <string name="clear_search_query">РћС‡РёСЃС‚РёС‚СЊ РїРѕРёСЃРєРѕРІС‹Р№ Р·Р°РїСЂРѕСЃ</string>
+
+    <string name="nothing_found">РќРёС‡РµРіРѕ РЅРµ РЅР°С€Р»РѕСЃСЊ</string>
+    <string name="connection_problems">РџСЂРѕР±Р»РµРјС‹ СЃРѕ СЃРІСЏР·СЊСЋ</string>
+    <string name="connection_problems_message">Р—Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ. РџСЂРѕРІРµСЂСЊС‚Рµ РїРѕРґРєР»СЋС‡РµРЅРёРµ Рє РёРЅС‚РµСЂРЅРµС‚Сѓ</string>
+    <string name="update">РћР±РЅРѕРІРёС‚СЊ</string>
+    <string name="audio_player_cover_description">РћР±Р»РѕР¶РєР° С‚СЂРµРєР°</string>
+    <string name="audio_player_add_to_playlist">Р”РѕР±Р°РІРёС‚СЊ РІ РїР»РµР№Р»РёСЃС‚</string>
+    <string name="audio_player_play">РРіСЂР°С‚СЊ</string>
+    <string name="audio_player_like">РќСЂР°РІРёС‚СЃСЏ</string>
+    <string name="audio_player_duration_label">Р”Р»РёС‚РµР»СЊРЅРѕСЃС‚СЊ</string>
+    <string name="audio_player_year_label">Р“РѕРґ</string>
+    <string name="audio_player_genre_label">Р–Р°РЅСЂ</string>
+    <string name="audio_player_country_label">РЎС‚СЂР°РЅР°</string>
+    <string name="audio_player_album_label">РђР»СЊР±РѕРј</string>
+    <string name="audio_player_add_to_playlist_icon_description">Р”РѕР±Р°РІРёС‚СЊ РІ РїР»РµР№Р»РёСЃС‚</string>
+    <string name="audio_player_play_icon_description">Р’РѕСЃРїСЂРѕРёР·РІРµСЃС‚Рё</string>
+    <string name="audio_player_like_icon_description">Р›Р°Р№Рє</string>
+    <string name="audio_player_current_time_default">00:00</string>
+    <string name="library_playlists_tab">РџР»РµР№Р»РёСЃС‚С‹</string>
+    <string name="library_new_playlist">РќРѕРІС‹Р№ РїР»РµР№Р»РёСЃС‚</string>
+    <string name="library_empty_playlists_message">Р’С‹ РЅРµ СЃРѕР·РґР°Р»Рё РЅРё РѕРґРЅРѕРіРѕ РїР»РµР№Р»РёСЃС‚Р°</string>
+    <string name="new_playlist_title">РќРѕРІС‹Р№ РїР»РµР№Р»РёСЃС‚</string>
+    <string name="new_playlist_name_hint">РќР°Р·РІР°РЅРёРµ</string>
+    <string name="new_playlist_description_hint">РћРїРёСЃР°РЅРёРµ</string>
+    <string name="new_playlist_cover_hint">Р”РѕР±Р°РІРёС‚СЊ РѕР±Р»РѕР¶РєСѓ</string>
+    <string name="new_playlist_create_button">РЎРѕР·РґР°С‚СЊ</string>
+    <string name="new_playlist_finish_creation_title">Р—Р°РІРµСЂС€РёС‚СЊ СЃРѕР·РґР°РЅРёРµ?</string>
+    <string name="new_playlist_finish_creation_positive">Р—Р°РІРµСЂС€РёС‚СЊ</string>
+    <string name="new_playlist_finish_creation_negative">РћС‚РјРµРЅР°</string>
+    <string name="new_playlist_created">РџР»РµР№Р»РёСЃС‚ %1$s СЃРѕР·РґР°РЅ</string>
+    <string name="playlist_tracks_count_single">%1$d С‚СЂРµРє</string>
+    <string name="playlist_tracks_count_few">%1$d С‚СЂРµРєР°</string>
+    <string name="playlist_tracks_count_many">%1$d С‚СЂРµРєРѕРІ</string>
+    <string name="audio_player_bottom_sheet_title">Р”РѕР±Р°РІРёС‚СЊ РІ РїР»РµР№Р»РёСЃС‚</string>
+    <string name="playlist_track_added">Р”РѕР±Р°РІР»РµРЅРѕ РІ РїР»РµР№Р»РёСЃС‚ %1$s</string>
+    <string name="playlist_track_already_added">РўСЂРµРє СѓР¶Рµ РґРѕР±Р°РІР»РµРЅ РІ РїР»РµР№Р»РёСЃС‚ %1$s</string>
+    <string name="playlist_cover_content_description">РћР±Р»РѕР¶РєР° РїР»РµР№Р»РёСЃС‚Р°</string>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\styles.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- РЎС‚РёР»Рё РґР»СЏ Р“Р»Р°РІРЅРѕРіРѕ Р­РєСЂР°РЅР° -->
+
+    <style name="MainScreenHeader">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/yp_text_on_dark_background</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <style name="MainScreenButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:background">@drawable/white_rounded_background</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">horizontal</item>
+    </style>
+
+    <!-- РР—РњР•РќР•РќРћ: РРјСЏ СЃС‚РёР»СЏ Р±РµР· С‚РѕС‡РєРё -->
+    <style name="MainScreenButtonText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textColor">@color/black</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <!-- РР—РњР•РќР•РќРћ: РРјСЏ СЃС‚РёР»СЏ Р±РµР· С‚РѕС‡РєРё -->
+    <style name="MainScreenButtonIcon">
+        <item name="android:layout_width">24dp</item>
+        <item name="android:layout_height">24dp</item>
+    </style>
+
+    <!-- РЎС‚РёР»Рё РґР»СЏ Р­РєСЂР°РЅР° РќР°СЃС‚СЂРѕРµРє -->
+
+    <style name="SettingsScreenHeader">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">28dp</item>
+        <item name="android:textColor">@color/yp_text_primary</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <style name="SettingsScreenMenuItem">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">61dp</item>
+    </style>
+
+    <!-- РР—РњР•РќР•РќРћ: РРјСЏ СЃС‚РёР»СЏ Р±РµР· С‚РѕС‡РєРё -->
+    <style name="SettingsMenuItemText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_gravity">center_vertical|start</item>
+        <item name="android:textColor">@color/yp_text_primary</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:fontFamily">@font/ys_display_regular</item>
+    </style>
+
+    <!-- РР—РњР•РќР•РќРћ: РРјСЏ СЃС‚РёР»СЏ Р±РµР· С‚РѕС‡РєРё -->
+    <style name="SettingsMenuItemIcon">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">20dp</item>
+        <item name="android:layout_gravity">center_vertical|end</item>
+    </style>
+
+    <!-- РќРћР’Р«Р™ Р РђР—Р”Р•Р›: РЎС‚РёР»Рё РґР»СЏ Р­РєСЂР°РЅР° РџРѕРёСЃРєР° -->
+    <style name="SearchEditText">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:background">@drawable/search_edittext_background</item>
+        <item name="android:drawableStart">@drawable/ic_search</item>
+        <item name="android:drawablePadding">8dp</item>
+        <item name="android:hint">@string/search</item>
+        <item name="android:inputType">text</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">40dp</item>
+        <item name="android:textColor">@color/yp_black</item>
+        <item name="android:textColorHint">@color/yp_gray</item>
+        <item name="android:textSize">20sp</item>
+        <item name="fontFamily">@font/ys_display_regular</item>
+    </style>
+
+    <style name="SearchClearIcon">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_gravity">end|center_vertical</item>
+        <item name="android:padding">10dp</item>
+        <item name="android:src">@drawable/ic_clear</item>
+        <item name="android:visibility">gone</item>
+    </style>
+
+    <style name="SearchHistoryHeader">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">18dp</item>
+        <item name="android:textColor">@color/yp_text_primary</item>
+        <item name="android:textSize">19sp</item>
+        <item name="fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <style name="SearchHistoryClearButton" parent="Widget.MaterialComponents.Button.UnelevatedButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">24dp</item>
+        <item name="android:backgroundTint">@color/yp_text_primary</item>
+        <item name="android:text">РћС‡РёСЃС‚РёС‚СЊ РёСЃС‚РѕСЂРёСЋ</item>
+        <item name="android:textColor">@color/yp_background_secondary</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="cornerRadius">24dp</item>
+    </style>
+
+    <!-- РќРћР’Р«Р™ Р РђР—Р”Р•Р›: РЎС‚РёР»Рё РґР»СЏ РїР»РµР№СЃС…РѕР»РґРµСЂРѕРІ РЅР° СЌРєСЂР°РЅРµ РџРѕРёСЃРєР° -->
+    <style name="SearchPlaceholder">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">102dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:visibility">gone</item>
+    </style>
+
+    <style name="SearchPlaceholder.Icon">
+        <item name="android:layout_width">120dp</item>
+        <item name="android:layout_height">120dp</item>
+    </style>
+
+    <style name="SearchPlaceholder.Title" parent="SearchHistoryHeader">
+        <item name="android:layout_marginTop">16dp</item>
+    </style>
+
+    <style name="SearchPlaceholder.Message">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">16dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">?attr/colorControlNormal</item>
+    </style>
+
+    <style name="SearchProgressBar">
+        <item name="android:layout_width">44dp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:layout_gravity">center</item>
+        <item name="android:indeterminateTint">@color/yp_blue</item>
+        <item name="android:visibility">gone</item>
+    </style>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\themes.xml ---
+
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.AlexRosh" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorControlNormal">@color/yp_icon_primary</item>
+    </style>
+
+    <style name="Theme.AlexRosh" parent="Base.Theme.AlexRosh" />
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values-night\colors.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- РўРµРјР°С‚РёС‡РµСЃРєРёРµ С†РІРµС‚Р° РґР»СЏ С‚С‘РјРЅРѕР№ С‚РµРјС‹ -->
+    <color name="yp_background_main">@color/yp_black</color>
+    <color name="yp_background_secondary">@color/yp_black</color> <!-- РРЎРџР РђР’Р›Р•РќРћ -->
+    <color name="yp_text_primary">@color/white</color>
+    <color name="yp_text_on_dark_background">@color/white</color>
+    <color name="yp_icon_primary">@color/white</color>
+    <color name="yp_search_background">@color/white</color>
+    <color name="audio_player_secondary_button_bg">#31313A</color>
+    <color name="audio_player_play_button_bg">@color/white</color>
+    <color name="audio_player_icon_on_primary">@color/yp_black</color>
+    <color name="audio_player_icon_on_secondary">@color/white</color>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values-night\themes.xml ---
+
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.AlexRosh" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your dark theme here. -->
+        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+    </style>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\xml\backup_rules.xml ---
+
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample backup rules file; uncomment and customize as necessary.
+   See https://developer.android.com/guide/topics/data/autobackup
+   for details.
+   Note: This file is ignored for devices older than API 31
+   See https://developer.android.com/about/versions/12/backup-restore
+-->
+<full-backup-content>
+    <!--
+   <include domain="sharedpref" path="."/>
+   <exclude domain="sharedpref" path="device.xml"/>
+-->
+</full-backup-content>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\xml\data_extraction_rules.xml ---
+
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample data extraction rules file; uncomment and customize as necessary.
+   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
+   for details.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- TODO: Use <include> and <exclude> to control what is backed up.
+        <include .../>
+        <exclude .../>
+        -->
+    </cloud-backup>
+    <!--
+    <device-transfer>
+        <include .../>
+        <exclude .../>
+    </device-transfer>
+    -->
+</data-extraction-rules>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\AndroidManifest.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:name=".App"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".SettingsActivity"/>
+        <activity android:name=".SearchActivity"/>
+        <activity android:name=".LibraryActivity"/>
+        <activity android:name=".AudioPlayerActivity"/>
+        <activity android:name=".NewPlaylistActivity"/>
+    </application>
+
+</manifest>
+

@@ -27,6 +27,7 @@
         <activity android:name=".SearchActivity"/>
         <activity android:name=".LibraryActivity"/>
         <activity android:name=".AudioPlayerActivity"/>
+        <activity android:name=".NewPlaylistActivity"/>
     </application>
 
 </manifest>

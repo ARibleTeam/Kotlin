@@ -10,14 +10,22 @@ import android.os.Looper
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.OnBackPressedCallback
+import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.gson.Gson
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AudioPlayerActivity : AppCompatActivity() {
 
@@ -27,8 +35,13 @@ class AudioPlayerActivity : AppCompatActivity() {
 
     private lateinit var playButton: ImageButton
     private lateinit var currentTimeValue: TextView
+    private lateinit var likeButton: ImageButton
+    private lateinit var currentTrack: Track
+    private lateinit var bottomSheetBehavior: BottomSheetBehavior<LinearLayout>
+    private lateinit var playlistsAdapter: PlaylistBottomSheetAdapter
 
     private var playerState = STATE_DEFAULT
+    private var isFavorite = false
     private val progressRunnable = object : Runnable {
         override fun run() {
             if (playerState == STATE_PLAYING) {
@@ -52,8 +65,11 @@ class AudioPlayerActivity : AppCompatActivity() {
             return
         }
 
+        currentTrack = track
         setupViews(track)
         preparePlayer(track.previewUrl)
+        checkFavoriteState(track.trackId)
+        setupBackHandler()
     }
 
     private fun setupViews(track: Track) {
@@ -69,8 +85,11 @@ class AudioPlayerActivity : AppCompatActivity() {
         val durationValue = findViewById<TextView>(R.id.duration_value)
         currentTimeValue = findViewById(R.id.current_time_value)
         val addToPlaylistButton = findViewById<ImageButton>(R.id.add_to_playlist_button)
+        val newPlaylistButton = findViewById<com.google.android.material.button.MaterialButton>(R.id.new_playlist_button)
+        val playlistBottomSheet = findViewById<LinearLayout>(R.id.playlist_bottom_sheet)
+        val playlistsRecycler = findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.playlists_bottom_sheet_recycler)
         playButton = findViewById(R.id.play_button)
-        val likeButton = findViewById<ImageButton>(R.id.like_button)
+        likeButton = findViewById(R.id.like_button)
 
         backButton.setOnClickListener { finish() }
 
@@ -101,21 +120,114 @@ class AudioPlayerActivity : AppCompatActivity() {
 
         addToPlaylistButton.setImageResource(R.drawable.ic_playlist_add)
         playButton.setImageResource(R.drawable.ic_play)
-        likeButton.setImageResource(R.drawable.ic_like)
+        renderLikeButton()
 
         val secondaryIconTint = ContextCompat.getColor(this, R.color.audio_player_icon_on_secondary)
         val primaryIconTint = ContextCompat.getColor(this, R.color.audio_player_icon_on_primary)
         addToPlaylistButton.imageTintList = ColorStateList.valueOf(secondaryIconTint)
         playButton.imageTintList = ColorStateList.valueOf(primaryIconTint)
-        likeButton.imageTintList = ColorStateList.valueOf(secondaryIconTint)
+        likeButton.imageTintList = null
 
         playButton.isEnabled = false
         currentTimeValue.text = getString(R.string.audio_player_current_time_default)
 
-        // UI-only buttons: handlers intentionally left empty by requirement.
-        addToPlaylistButton.setOnClickListener { }
+        setupBottomSheet(playlistBottomSheet, playlistsRecycler)
+        addToPlaylistButton.setOnClickListener { showBottomSheet() }
+        newPlaylistButton.setOnClickListener {
+            startActivity(NewPlaylistActivity.createIntent(this))
+        }
         playButton.setOnClickListener { playbackControl() }
-        likeButton.setOnClickListener { }
+        likeButton.setOnClickListener { onLikeClicked() }
+    }
+
+    private fun setupBottomSheet(
+        bottomSheet: LinearLayout,
+        playlistsRecycler: androidx.recyclerview.widget.RecyclerView
+    ) {
+        bottomSheetBehavior = BottomSheetBehavior.from(bottomSheet).apply {
+            state = BottomSheetBehavior.STATE_HIDDEN
+            isHideable = true
+            skipCollapsed = false
+        }
+        playlistsAdapter = PlaylistBottomSheetAdapter { playlist ->
+            onPlaylistSelected(playlist)
+        }
+        playlistsRecycler.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        playlistsRecycler.adapter = playlistsAdapter
+        observePlaylists()
+    }
+
+    private fun observePlaylists() {
+        lifecycleScope.launch {
+            (applicationContext as App).database.playlistDao().getPlaylists().collectLatest {
+                playlistsAdapter.setItems(it)
+            }
+        }
+    }
+
+    private fun showBottomSheet() {
+        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
+    }
+
+    private fun setupBackHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (::bottomSheetBehavior.isInitialized &&
+                    bottomSheetBehavior.state != BottomSheetBehavior.STATE_HIDDEN
+                ) {
+                    bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+                } else {
+                    finish()
+                }
+            }
+        })
+    }
+
+    private fun onPlaylistSelected(playlist: PlaylistEntity) {
+        lifecycleScope.launch {
+            val isAdded = withContext(Dispatchers.IO) {
+                (applicationContext as App).database.playlistDao()
+                    .addTrackToPlaylist(PlaylistTrackCrossRef(playlist.id, currentTrack.trackId))
+            }
+            val message = if (isAdded) {
+                getString(R.string.playlist_track_added, playlist.name)
+            } else {
+                getString(R.string.playlist_track_already_added, playlist.name)
+            }
+            android.widget.Toast.makeText(this@AudioPlayerActivity, message, android.widget.Toast.LENGTH_SHORT).show()
+            if (isAdded) {
+                bottomSheetBehavior.state = BottomSheetBehavior.STATE_HIDDEN
+            }
+        }
+    }
+
+    private fun checkFavoriteState(trackId: Long) {
+        lifecycleScope.launch {
+            isFavorite = withContext(Dispatchers.IO) {
+                (applicationContext as App).database.trackDao().isFavorite(trackId)
+            }
+            renderLikeButton()
+        }
+    }
+
+    private fun onLikeClicked() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val dao = (applicationContext as App).database.trackDao()
+                if (isFavorite) {
+                    dao.getTrackById(currentTrack.trackId)?.let { dao.deleteTrack(it) }
+                } else {
+                    dao.insertTrack(currentTrack.toEntity())
+                }
+            }
+            isFavorite = !isFavorite
+            renderLikeButton()
+        }
+    }
+
+    private fun renderLikeButton() {
+        if (!::likeButton.isInitialized) return
+        likeButton.setImageResource(if (isFavorite) R.drawable.ic_like_filled else R.drawable.ic_like)
     }
 
     private fun preparePlayer(previewUrl: String?) {

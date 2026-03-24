@@ -9,6 +9,8 @@
     <string name="main_title">Playlist maker</string>
     <string name="search">Поиск</string>
     <string name="library">Медиатека</string>
+    <string name="favorite_tracks_title">Избранные треки</string>
+    <string name="favorite_tracks_empty_message">Ваша медиатека пуста</string>
     <string name="main_settings">Настройка</string>
 
     <string name="share_message">Я использую приложение Рощупкина Алексея ИС-221</string>
@@ -35,4 +37,23 @@
     <string name="audio_player_play_icon_description">Воспроизвести</string>
     <string name="audio_player_like_icon_description">Лайк</string>
     <string name="audio_player_current_time_default">00:00</string>
+    <string name="library_playlists_tab">Плейлисты</string>
+    <string name="library_new_playlist">Новый плейлист</string>
+    <string name="library_empty_playlists_message">Вы не создали ни одного плейлиста</string>
+    <string name="new_playlist_title">Новый плейлист</string>
+    <string name="new_playlist_name_hint">Название</string>
+    <string name="new_playlist_description_hint">Описание</string>
+    <string name="new_playlist_cover_hint">Добавить обложку</string>
+    <string name="new_playlist_create_button">Создать</string>
+    <string name="new_playlist_finish_creation_title">Завершить создание?</string>
+    <string name="new_playlist_finish_creation_positive">Завершить</string>
+    <string name="new_playlist_finish_creation_negative">Отмена</string>
+    <string name="new_playlist_created">Плейлист %1$s создан</string>
+    <string name="playlist_tracks_count_single">%1$d трек</string>
+    <string name="playlist_tracks_count_few">%1$d трека</string>
+    <string name="playlist_tracks_count_many">%1$d треков</string>
+    <string name="audio_player_bottom_sheet_title">Добавить в плейлист</string>
+    <string name="playlist_track_added">Добавлено в плейлист %1$s</string>
+    <string name="playlist_track_already_added">Трек уже добавлен в плейлист %1$s</string>
+    <string name="playlist_cover_content_description">Обложка плейлиста</string>
 </resources>

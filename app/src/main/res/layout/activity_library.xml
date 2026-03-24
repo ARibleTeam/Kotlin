@@ -1,17 +1,128 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/yp_background_secondary"
+    android:orientation="vertical"
+    tools:context=".LibraryActivity">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Экран Медиатеки"
-        android:textSize="22sp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <ImageView
+            android:id="@+id/back_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/back_button_description"
+            android:src="@drawable/ic_arrow_back" />
+
+        <TextView
+            style="@style/SettingsScreenHeader"
+            android:text="@string/library" />
+    </LinearLayout>
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/library_tabs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        app:tabIndicatorColor="@color/yp_text_primary"
+        app:tabIndicatorFullWidth="false"
+        app:tabRippleColor="@android:color/transparent"
+        app:tabTextAppearance="@style/TextAppearance.MaterialComponents.Subtitle1"
+        app:tabTextColor="@color/yp_text_primary">
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/favorite_tracks_title" />
+
+        <com.google.android.material.tabs.TabItem
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/library_playlists_tab" />
+    </com.google.android.material.tabs.TabLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:id="@+id/playlists_content"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/new_playlist_button"
+                style="@style/SearchHistoryClearButton"
+                android:layout_width="wrap_content"
+                android:layout_height="35dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="16dp"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:text="@string/library_new_playlist" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/playlists_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginTop="16dp"
+                android:paddingHorizontal="8dp"
+                android:visibility="gone"
+                tools:itemCount="4"
+                tools:listitem="@layout/playlist_grid_item" />
+        </LinearLayout>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/favorite_tracks_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            tools:itemCount="5"
+            tools:listitem="@layout/track_view" />
+
+        <LinearLayout
+            android:id="@+id/empty_favorite_tracks_placeholder"
+            style="@style/SearchPlaceholder"
+            tools:visibility="visible">
+
+            <ImageView
+                style="@style/SearchPlaceholder.Icon"
+                android:contentDescription="@string/favorite_tracks_empty_message"
+                android:src="@drawable/ic_nothing_found" />
+
+            <TextView
+                style="@style/SearchPlaceholder.Title"
+                android:text="@string/favorite_tracks_empty_message" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/empty_playlists_placeholder"
+            style="@style/SearchPlaceholder"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <ImageView
+                style="@style/SearchPlaceholder.Icon"
+                android:contentDescription="@string/library_empty_playlists_message"
+                android:src="@drawable/ic_nothing_found" />
+
+            <TextView
+                style="@style/SearchPlaceholder.Title"
+                android:text="@string/library_empty_playlists_message" />
+        </LinearLayout>
+    </FrameLayout>
+
+</LinearLayout>

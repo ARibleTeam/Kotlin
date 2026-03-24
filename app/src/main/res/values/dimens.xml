@@ -6,6 +6,9 @@
     <dimen name="audio_player_button_height">36dp</dimen>
     <dimen name="audio_player_circle_button_size">56dp</dimen>
     <dimen name="audio_player_control_button_size">56dp</dimen>
-    <dimen name="audio_player_side_button_size">52dp</dimen>
-    <dimen name="audio_player_play_button_size">56dp</dimen>
+    <dimen name="audio_player_side_button_size">56dp</dimen>
+    <dimen name="audio_player_play_button_size">72dp</dimen>
+    <dimen name="audio_player_controls_inner_spacing">12dp</dimen>
+    <dimen name="playlist_grid_image_size">160dp</dimen>
+    <dimen name="playlist_bottom_sheet_peek_height">420dp</dimen>
 </resources>
