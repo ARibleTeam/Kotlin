@@ -15,5 +15,9 @@
     <color name="yp_text_on_dark_background">@color/white</color>
     <color name="yp_icon_primary">@color/black</color>
     <color name="yp_search_background">@color/yp_light_gray</color>
+    <color name="audio_player_secondary_button_bg">#E6E8EB</color>
+    <color name="audio_player_play_button_bg">@color/yp_black</color>
+    <color name="audio_player_icon_on_primary">@color/white</color>
+    <color name="audio_player_icon_on_secondary">@color/yp_gray</color>
 
 </resources>

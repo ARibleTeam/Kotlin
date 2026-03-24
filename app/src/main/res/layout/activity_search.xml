@@ -95,7 +95,9 @@
             tools:visibility="gone">
 
             <ImageView
+                android:id="@+id/nothing_found_icon"
                 style="@style/SearchPlaceholder.Icon"
+                android:visibility="visible"
                 android:src="@drawable/ic_nothing_found"
                 android:contentDescription="@string/nothing_found"/>
 
@@ -111,7 +113,9 @@
             tools:visibility="gone">
 
             <ImageView
+                android:id="@+id/connection_error_icon"
                 style="@style/SearchPlaceholder.Icon"
+                android:visibility="visible"
                 android:src="@drawable/ic_connection_error"
                 android:contentDescription="@string/connection_problems"/>
 

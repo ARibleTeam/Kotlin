@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <dimen name="track_artwork_corner_radius">2dp</dimen>
+    <dimen name="audio_player_side_margin">16dp</dimen>
+    <dimen name="audio_player_cover_size">220dp</dimen>
+    <dimen name="audio_player_button_height">36dp</dimen>
+    <dimen name="audio_player_circle_button_size">56dp</dimen>
+    <dimen name="audio_player_control_button_size">56dp</dimen>
+    <dimen name="audio_player_side_button_size">52dp</dimen>
+    <dimen name="audio_player_play_button_size">56dp</dimen>
 </resources>

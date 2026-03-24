@@ -12,7 +12,6 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -35,6 +34,8 @@ class SearchActivity : AppCompatActivity() {
     private lateinit var clearHistoryButton: Button
     private lateinit var nothingFoundPlaceholder: LinearLayout
     private lateinit var connectionErrorPlaceholder: LinearLayout
+    private lateinit var nothingFoundIcon: ImageView
+    private lateinit var connectionErrorIcon: ImageView
     private lateinit var updateButton: Button
     private lateinit var progressBar: ProgressBar
 
@@ -95,6 +96,8 @@ class SearchActivity : AppCompatActivity() {
         historyRecyclerView = findViewById(R.id.history_recycler_view)
         nothingFoundPlaceholder = findViewById(R.id.nothing_found_placeholder)
         connectionErrorPlaceholder = findViewById(R.id.connection_error_placeholder)
+        nothingFoundIcon = findViewById(R.id.nothing_found_icon)
+        connectionErrorIcon = findViewById(R.id.connection_error_icon)
         updateButton = findViewById(R.id.update_button)
         progressBar = findViewById(R.id.progress_bar)
     }
@@ -103,8 +106,7 @@ class SearchActivity : AppCompatActivity() {
         val sharedPrefs = getSharedPreferences(SEARCH_HISTORY_PREFS, MODE_PRIVATE)
         searchHistory = SearchHistory(sharedPrefs)
         historyAdapter = TrackAdapter { track ->
-            // Тут должен быть переход на плеер, но его тут не будет :))))
-            Toast.makeText(this, "Откроется плеер для ${track.trackName}", Toast.LENGTH_SHORT).show()
+            openAudioPlayer(track)
         }
         historyRecyclerView.layoutManager = LinearLayoutManager(this)
         historyRecyclerView.adapter = historyAdapter
@@ -116,11 +118,16 @@ class SearchActivity : AppCompatActivity() {
             searchHistory.addTrack(track)
             historyAdapter.tracks = searchHistory.read()
             historyAdapter.notifyDataSetChanged()
-            // Тут должен быть переход на плеер, но его тут не будет :))))
+            openAudioPlayer(track)
         }
         resultsAdapter.tracks = tracks
         resultsRecyclerView.layoutManager = LinearLayoutManager(this)
         resultsRecyclerView.adapter = resultsAdapter
+    }
+
+    private fun openAudioPlayer(track: Track) {
+        val intent = AudioPlayerActivity.createIntent(this, track)
+        startActivity(intent)
     }
 
     private fun setupListeners() {
@@ -213,6 +220,8 @@ class SearchActivity : AppCompatActivity() {
         resultsRecyclerView.visibility = View.GONE
         nothingFoundPlaceholder.visibility = View.GONE
         connectionErrorPlaceholder.visibility = View.GONE
+        nothingFoundIcon.visibility = View.VISIBLE
+        connectionErrorIcon.visibility = View.VISIBLE
         historyView.visibility = View.GONE
 
         when (state) {
@@ -221,8 +230,14 @@ class SearchActivity : AppCompatActivity() {
                 resultsRecyclerView.visibility = View.VISIBLE
                 resultsAdapter.notifyDataSetChanged()
             }
-            SearchState.ERROR -> connectionErrorPlaceholder.visibility = View.VISIBLE
-            SearchState.EMPTY -> nothingFoundPlaceholder.visibility = View.VISIBLE
+            SearchState.ERROR -> {
+                connectionErrorPlaceholder.visibility = View.VISIBLE
+                connectionErrorIcon.visibility = View.VISIBLE
+            }
+            SearchState.EMPTY -> {
+                nothingFoundPlaceholder.visibility = View.VISIBLE
+                nothingFoundIcon.visibility = View.VISIBLE
+            }
             SearchState.HISTORY -> historyView.visibility = View.VISIBLE
         }
     }

@@ -1,0 +1,731 @@
+﻿
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_library.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Р­РєСЂР°РЅ РњРµРґРёР°С‚РµРєРё"
+        android:textSize="22sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_main.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/yp_background_main"
+        android:orientation="vertical">
+
+        <!-- РљРѕРЅС‚РµР№РЅРµСЂ РґР»СЏ Р·Р°РіРѕР»РѕРІРєР° СЃ РїСЂР°РІРёР»СЊРЅС‹РјРё РѕС‚СЃС‚СѓРїР°РјРё -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="20dp"
+            android:paddingVertical="16dp">
+
+            <TextView
+                style="@style/MainScreenHeader"
+                android:layout_gravity="start"
+                android:text="@string/main_title" />
+        </LinearLayout>
+
+        <!-- РљРѕРЅС‚РµР№РЅРµСЂ РґР»СЏ РєРЅРѕРїРѕРє СЃ РїСЂР°РІРёР»СЊРЅС‹РјРё РѕС‚СЃС‚СѓРїР°РјРё -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:paddingHorizontal="20dp"
+            android:paddingVertical="16dp">
+
+            <LinearLayout
+                android:id="@+id/search_btn"
+                style="@style/MainScreenButton">
+
+                <ImageView
+                    style="@style/MainScreenButtonIcon"
+                    android:src="@drawable/ic_search"
+                    android:contentDescription="@string/search"/>
+
+                <TextView
+                    style="@style/MainScreenButtonText"
+                    android:text="@string/search" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/library_btn"
+                style="@style/MainScreenButton"
+                android:layout_marginTop="16dp">
+
+                <ImageView
+                    style="@style/MainScreenButtonIcon"
+                    android:src="@drawable/ic_library"
+                    android:contentDescription="@string/library"/>
+
+                <TextView
+                    style="@style/MainScreenButtonText"
+                    android:text="@string/library" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/settings_btn"
+                style="@style/MainScreenButton"
+                android:layout_marginTop="16dp">
+
+                <ImageView
+                    style="@style/MainScreenButtonIcon"
+                    android:src="@drawable/ic_settings"
+                    android:contentDescription="@string/main_settings"/>
+
+                <TextView
+                    style="@style/MainScreenButtonText"
+                    android:text="@string/main_settings" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_search.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/yp_background_secondary"
+    android:orientation="vertical"
+    tools:context=".SearchActivity">
+
+    <!-- Р—Р°РіРѕР»РѕРІРѕРє (Р±РµР· РёР·РјРµРЅРµРЅРёР№) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
+
+        <ImageView
+            android:id="@+id/back_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/back_button_description"
+            android:src="@drawable/ic_arrow_back" />
+
+        <TextView
+            style="@style/SettingsScreenHeader"
+            android:text="@string/search" />
+    </LinearLayout>
+
+    <!-- РџРѕР»Рµ РїРѕРёСЃРєР° (Р±РµР· РёР·РјРµРЅРµРЅРёР№) -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginTop="8dp">
+
+        <EditText
+            android:id="@+id/search_edit_text"
+            style="@style/SearchEditText" />
+
+        <ImageView
+            android:id="@+id/clear_icon"
+            style="@style/SearchClearIcon"
+            android:contentDescription="@string/clear_search_query" />
+    </FrameLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- RecyclerView РґР»СЏ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РїРѕРёСЃРєР° (Р±РµР· РёР·РјРµРЅРµРЅРёР№) -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/track_recycler_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            tools:itemCount="5"
+            tools:listitem="@layout/track_view" />
+
+        <!-- Р‘Р»РѕРє РёСЃС‚РѕСЂРёРё РїРѕРёСЃРєР° (Р±РµР· РёР·РјРµРЅРµРЅРёР№) -->
+        <LinearLayout
+            android:id="@+id/search_history_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="top|center_horizontal"
+            android:orientation="vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                style="@style/SearchHistoryHeader"
+                android:text="Р’С‹ РёСЃРєР°Р»Рё" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/history_recycler_view"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                tools:itemCount="3"
+                tools:listitem="@layout/track_view" />
+
+            <Button
+                android:id="@+id/clear_history_button"
+                style="@style/SearchHistoryClearButton" />
+        </LinearLayout>
+
+        <ImageView
+            style="@style/SearchPlaceholder.Icon"
+            android:src="@drawable/ic_connection_error"
+            android:contentDescription="@string/connection_problems"/>
+
+        <!-- РџР»РµР№СЃС…РѕР»РґРµСЂ "РќРёС‡РµРіРѕ РЅРµ РЅР°С€Р»РѕСЃСЊ" -->
+        <LinearLayout
+            android:id="@+id/nothing_found_placeholder"
+            style="@style/SearchPlaceholder"
+            tools:visibility="gone">
+
+            <ImageView
+                style="@style/SearchPlaceholder.Icon"
+                android:src="@drawable/ic_nothing_found"
+                android:contentDescription="@string/nothing_found"/>
+
+            <TextView
+                style="@style/SearchPlaceholder.Title"
+                android:text="@string/nothing_found" />
+        </LinearLayout>
+
+        <!-- РџР»РµР№СЃС…РѕР»РґРµСЂ "РџСЂРѕР±Р»РµРјС‹ СЃРѕ СЃРІСЏР·СЊСЋ" -->
+        <LinearLayout
+            android:id="@+id/connection_error_placeholder"
+            style="@style/SearchPlaceholder"
+            tools:visibility="gone">
+
+            <ImageView
+                style="@style/SearchPlaceholder.Icon"
+                android:src="@drawable/ic_connection_error"
+                android:contentDescription="@string/connection_problems"/>
+
+            <TextView
+                style="@style/SearchPlaceholder.Title"
+                android:text="@string/connection_problems" />
+
+            <TextView
+                style="@style/SearchPlaceholder.Message"
+                android:text="@string/connection_problems_message" />
+
+            <Button
+                android:id="@+id/update_button"
+                style="@style/SearchHistoryClearButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/update" />
+        </LinearLayout>
+
+        <!-- РџСЂРѕРіСЂРµСЃСЃ-Р±Р°СЂ -->
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            style="@style/SearchProgressBar"
+            tools:visibility="gone"/>
+
+    </FrameLayout>
+
+</LinearLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\activity_settings.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/settings"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".SettingsActivity">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/yp_background_secondary"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingVertical="14dp">
+
+            <ImageView
+                android:id="@+id/back_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/back_button_description"
+                android:src="@drawable/ic_arrow_back" />
+
+            <TextView
+                style="@style/SettingsScreenHeader"
+                android:text="@string/settings_title" />
+
+        </LinearLayout>
+
+        <FrameLayout style="@style/SettingsScreenMenuItem">
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <TextView
+                style="@style/SettingsMenuItemText"
+                android:text="@string/dark_theme" />
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/theme_switch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical|end" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/share_btn"
+            style="@style/SettingsScreenMenuItem">
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <TextView
+                style="@style/SettingsMenuItemText"
+                android:text="@string/share_app" />
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <ImageView
+                style="@style/SettingsMenuItemIcon"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_share" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/support_btn"
+            style="@style/SettingsScreenMenuItem">
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <TextView
+                style="@style/SettingsMenuItemText"
+                android:text="@string/write_to_support" />
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <ImageView
+                style="@style/SettingsMenuItemIcon"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_support" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/agreement_btn"
+            style="@style/SettingsScreenMenuItem">
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <TextView
+                style="@style/SettingsMenuItemText"
+                android:text="@string/user_agreement" />
+            <!-- РР—РњР•РќР•РќРћ: РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РїСЂР°РІРёР»СЊРЅС‹Р№ СЃС‚РёР»СЊ -->
+            <ImageView
+                style="@style/SettingsMenuItemIcon"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_arrow_forward" />
+        </FrameLayout>
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\layout\track_view.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="61dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <ImageView
+        android:id="@+id/track_artwork"
+        android:layout_width="45dp"
+        android:layout_height="45dp"
+        android:layout_marginStart="13dp"
+        tools:src="@drawable/placeholder" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/track_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/yp_text_primary"
+            android:textSize="16sp"
+            app:fontFamily="@font/ys_display_regular"
+            tools:text="Yesterday (Remastered 2009)" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/track_artist_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/yp_gray"
+                android:textSize="11sp"
+                app:fontFamily="@font/ys_display_regular"
+                tools:text="The Beatles" />
+
+            <ImageView
+                android:layout_width="3dp"
+                android:layout_height="3dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginHorizontal="5dp"
+                android:src="@drawable/ic_dot" />
+
+            <TextView
+                android:id="@+id/track_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/yp_gray"
+                android:textSize="11sp"
+                app:fontFamily="@font/ys_display_regular"
+                tools:text="2:55" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/track_arrow"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:src="@drawable/ic_arrow_forward" />
+</LinearLayout>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\colors.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Р‘Р°Р·РѕРІС‹Рµ С†РІРµС‚Р°, РЅРµ РјРµРЅСЏСЋС‚СЃСЏ -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="yp_gray">#AEAFB4</color>
+    <color name="yp_blue">#3772E7</color>
+    <color name="yp_black">#1A1B22</color>
+    <color name="yp_light_gray">#E6E8EB</color>
+
+    <!-- РўРµРјР°С‚РёС‡РµСЃРєРёРµ С†РІРµС‚Р° РґР»СЏ СЃРІРµС‚Р»РѕР№ С‚РµРјС‹ -->
+    <color name="yp_background_main">@color/yp_blue</color>
+    <color name="yp_background_secondary">@color/white</color>
+    <color name="yp_text_primary">@color/black</color>
+    <color name="yp_text_on_dark_background">@color/white</color>
+    <color name="yp_icon_primary">@color/black</color>
+    <color name="yp_search_background">@color/yp_light_gray</color>
+
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\dimens.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="track_artwork_corner_radius">2dp</dimen>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\strings.xml ---
+
+<resources>
+    <string name="app_name">AlexRosh</string>
+    <string name="settings_title">РќР°СЃС‚СЂРѕР№РєРё</string>
+    <string name="dark_theme">РўРµРјРЅР°СЏ С‚РµРјР°</string>
+    <string name="share_app">РџРѕРґРµР»РёС‚СЊСЃСЏ РїСЂРёР»РѕР¶РµРЅРёРµРј</string>
+    <string name="write_to_support">РќР°РїРёСЃР°С‚СЊ РІ РїРѕРґРґРµСЂР¶РєСѓ</string>
+    <string name="user_agreement">РџРѕР»СЊР·РѕРІР°С‚РµР»СЊСЃРєРѕРµ СЃРѕРіР»Р°С€РµРЅРёРµ</string>
+    <string name="back_button_description">РќР°Р·Р°Рґ</string>
+    <string name="main_title">Playlist maker</string>
+    <string name="search">РџРѕРёСЃРє</string>
+    <string name="library">РњРµРґРёР°С‚РµРєР°</string>
+    <string name="main_settings">РќР°СЃС‚СЂРѕР№РєР°</string>
+
+    <string name="share_message">РЇ РёСЃРїРѕР»СЊР·СѓСЋ РїСЂРёР»РѕР¶РµРЅРёРµ Р РѕС‰СѓРїРєРёРЅР° РђР»РµРєСЃРµСЏ РРЎ-221</string>
+    <string name="support_email">AlexseyRoshupkin@yandex.ru</string>
+    <string name="support_subject">РЎРѕРѕР±С‰РµРЅРёРµ СЂР°Р·СЂР°Р±РѕС‚С‡РёРєР°Рј Playlist Maker</string>
+    <string name="support_body">Р Р°Р±РѕС‚Р°РµС‚!!</string>
+    <string name="agreement_url">https://vivt.ru/</string>
+    <string name="clear_search_query">РћС‡РёСЃС‚РёС‚СЊ РїРѕРёСЃРєРѕРІС‹Р№ Р·Р°РїСЂРѕСЃ</string>
+
+    <string name="nothing_found">РќРёС‡РµРіРѕ РЅРµ РЅР°С€Р»РѕСЃСЊ</string>
+    <string name="connection_problems">РџСЂРѕР±Р»РµРјС‹ СЃРѕ СЃРІСЏР·СЊСЋ</string>
+    <string name="connection_problems_message">Р—Р°РіСЂСѓР·РєР° РЅРµ СѓРґР°Р»Р°СЃСЊ. РџСЂРѕРІРµСЂСЊС‚Рµ РїРѕРґРєР»СЋС‡РµРЅРёРµ Рє РёРЅС‚РµСЂРЅРµС‚Сѓ</string>
+    <string name="update">РћР±РЅРѕРІРёС‚СЊ</string>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\styles.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- РЎС‚РёР»Рё РґР»СЏ Р“Р»Р°РІРЅРѕРіРѕ Р­РєСЂР°РЅР° -->
+
+    <style name="MainScreenHeader">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/yp_text_on_dark_background</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <style name="MainScreenButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:background">@drawable/white_rounded_background</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">horizontal</item>
+    </style>
+
+    <!-- РР—РњР•РќР•РќРћ: РРјСЏ СЃС‚РёР»СЏ Р±РµР· С‚РѕС‡РєРё -->
+    <style name="MainScreenButtonText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">8dp</item>
+        <item name="android:textColor">@color/black</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <!-- РР—РњР•РќР•РќРћ: РРјСЏ СЃС‚РёР»СЏ Р±РµР· С‚РѕС‡РєРё -->
+    <style name="MainScreenButtonIcon">
+        <item name="android:layout_width">24dp</item>
+        <item name="android:layout_height">24dp</item>
+    </style>
+
+    <!-- РЎС‚РёР»Рё РґР»СЏ Р­РєСЂР°РЅР° РќР°СЃС‚СЂРѕРµРє -->
+
+    <style name="SettingsScreenHeader">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">28dp</item>
+        <item name="android:textColor">@color/yp_text_primary</item>
+        <item name="android:textSize">22sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <style name="SettingsScreenMenuItem">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">61dp</item>
+    </style>
+
+    <!-- РР—РњР•РќР•РќРћ: РРјСЏ СЃС‚РёР»СЏ Р±РµР· С‚РѕС‡РєРё -->
+    <style name="SettingsMenuItemText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_gravity">center_vertical|start</item>
+        <item name="android:textColor">@color/yp_text_primary</item>
+        <item name="android:textSize">18sp</item>
+        <item name="android:fontFamily">@font/ys_display_regular</item>
+    </style>
+
+    <!-- РР—РњР•РќР•РќРћ: РРјСЏ СЃС‚РёР»СЏ Р±РµР· С‚РѕС‡РєРё -->
+    <style name="SettingsMenuItemIcon">
+        <item name="android:layout_width">20dp</item>
+        <item name="android:layout_height">20dp</item>
+        <item name="android:layout_gravity">center_vertical|end</item>
+    </style>
+
+    <!-- РќРћР’Р«Р™ Р РђР—Р”Р•Р›: РЎС‚РёР»Рё РґР»СЏ Р­РєСЂР°РЅР° РџРѕРёСЃРєР° -->
+    <style name="SearchEditText">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">match_parent</item>
+        <item name="android:background">@drawable/search_edittext_background</item>
+        <item name="android:drawableStart">@drawable/ic_search</item>
+        <item name="android:drawablePadding">8dp</item>
+        <item name="android:hint">@string/search</item>
+        <item name="android:inputType">text</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">40dp</item>
+        <item name="android:textColor">@color/yp_black</item>
+        <item name="android:textColorHint">@color/yp_gray</item>
+        <item name="android:textSize">20sp</item>
+        <item name="fontFamily">@font/ys_display_regular</item>
+    </style>
+
+    <style name="SearchClearIcon">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_gravity">end|center_vertical</item>
+        <item name="android:padding">10dp</item>
+        <item name="android:src">@drawable/ic_clear</item>
+        <item name="android:visibility">gone</item>
+    </style>
+
+    <style name="SearchHistoryHeader">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">18dp</item>
+        <item name="android:textColor">@color/yp_text_primary</item>
+        <item name="android:textSize">19sp</item>
+        <item name="fontFamily">@font/ys_display_medium</item>
+    </style>
+
+    <style name="SearchHistoryClearButton" parent="Widget.MaterialComponents.Button.UnelevatedButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">24dp</item>
+        <item name="android:backgroundTint">@color/yp_text_primary</item>
+        <item name="android:text">РћС‡РёСЃС‚РёС‚СЊ РёСЃС‚РѕСЂРёСЋ</item>
+        <item name="android:textColor">@color/yp_background_secondary</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="cornerRadius">24dp</item>
+    </style>
+
+    <!-- РќРћР’Р«Р™ Р РђР—Р”Р•Р›: РЎС‚РёР»Рё РґР»СЏ РїР»РµР№СЃС…РѕР»РґРµСЂРѕРІ РЅР° СЌРєСЂР°РЅРµ РџРѕРёСЃРєР° -->
+    <style name="SearchPlaceholder">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">102dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:visibility">gone</item>
+    </style>
+
+    <style name="SearchPlaceholder.Icon">
+        <item name="android:layout_width">120dp</item>
+        <item name="android:layout_height">120dp</item>
+        <item name="android:visibility">gone</item>
+    </style>
+
+    <style name="SearchPlaceholder.Title" parent="SearchHistoryHeader">
+        <item name="android:layout_marginTop">16dp</item>
+    </style>
+
+    <style name="SearchPlaceholder.Message">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">16dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">?attr/colorControlNormal</item>
+    </style>
+
+    <style name="SearchProgressBar">
+        <item name="android:layout_width">44dp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:layout_gravity">center</item>
+        <item name="android:indeterminateTint">@color/yp_blue</item>
+        <item name="android:visibility">gone</item>
+    </style>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values\themes.xml ---
+
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.AlexRosh" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorControlNormal">@color/yp_icon_primary</item>
+    </style>
+
+    <style name="Theme.AlexRosh" parent="Base.Theme.AlexRosh" />
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values-night\colors.xml ---
+
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- РўРµРјР°С‚РёС‡РµСЃРєРёРµ С†РІРµС‚Р° РґР»СЏ С‚С‘РјРЅРѕР№ С‚РµРјС‹ -->
+    <color name="yp_background_main">@color/yp_black</color>
+    <color name="yp_background_secondary">@color/yp_black</color> <!-- РРЎРџР РђР’Р›Р•РќРћ -->
+    <color name="yp_text_primary">@color/white</color>
+    <color name="yp_text_on_dark_background">@color/white</color>
+    <color name="yp_icon_primary">@color/white</color>
+    <color name="yp_search_background">@color/white</color>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\values-night\themes.xml ---
+
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.AlexRosh" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your dark theme here. -->
+        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+    </style>
+</resources>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\xml\backup_rules.xml ---
+
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample backup rules file; uncomment and customize as necessary.
+   See https://developer.android.com/guide/topics/data/autobackup
+   for details.
+   Note: This file is ignored for devices older than API 31
+   See https://developer.android.com/about/versions/12/backup-restore
+-->
+<full-backup-content>
+    <!--
+   <include domain="sharedpref" path="."/>
+   <exclude domain="sharedpref" path="device.xml"/>
+-->
+</full-backup-content>
+
+
+--- FILE: E:\Kotlin\AlexRosh\app\src\main\res\xml\data_extraction_rules.xml ---
+
+<?xml version="1.0" encoding="utf-8"?><!--
+   Sample data extraction rules file; uncomment and customize as necessary.
+   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
+   for details.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- TODO: Use <include> and <exclude> to control what is backed up.
+        <include .../>
+        <exclude .../>
+        -->
+    </cloud-backup>
+    <!--
+    <device-transfer>
+        <include .../>
+        <exclude .../>
+    </device-transfer>
+    -->
+</data-extraction-rules>
+
