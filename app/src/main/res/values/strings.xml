@@ -34,5 +34,5 @@
     <string name="audio_player_add_to_playlist_icon_description">Добавить в плейлист</string>
     <string name="audio_player_play_icon_description">Воспроизвести</string>
     <string name="audio_player_like_icon_description">Лайк</string>
-    <string name="audio_player_current_time_default">0:30</string>
+    <string name="audio_player_current_time_default">00:00</string>
 </resources>

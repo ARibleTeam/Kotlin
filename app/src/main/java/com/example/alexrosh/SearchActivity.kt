@@ -2,10 +2,11 @@ package com.example.alexrosh
 
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
-import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.EditText
@@ -25,6 +26,12 @@ class SearchActivity : AppCompatActivity() {
 
     private var currentSearchQuery: String = ""
     private var lastSearchQuery: String = ""
+    private var isClickAllowed = true
+
+    private val searchHandler = Handler(Looper.getMainLooper())
+    private val clickHandler = Handler(Looper.getMainLooper())
+    private val searchRunnable = Runnable { searchRequest() }
+    private val clickRunnable = Runnable { isClickAllowed = true }
 
     // --- Views ---
     private lateinit var searchEditText: EditText
@@ -106,7 +113,9 @@ class SearchActivity : AppCompatActivity() {
         val sharedPrefs = getSharedPreferences(SEARCH_HISTORY_PREFS, MODE_PRIVATE)
         searchHistory = SearchHistory(sharedPrefs)
         historyAdapter = TrackAdapter { track ->
-            openAudioPlayer(track)
+            if (clickDebounce()) {
+                openAudioPlayer(track)
+            }
         }
         historyRecyclerView.layoutManager = LinearLayoutManager(this)
         historyRecyclerView.adapter = historyAdapter
@@ -118,7 +127,9 @@ class SearchActivity : AppCompatActivity() {
             searchHistory.addTrack(track)
             historyAdapter.tracks = searchHistory.read()
             historyAdapter.notifyDataSetChanged()
-            openAudioPlayer(track)
+            if (clickDebounce()) {
+                openAudioPlayer(track)
+            }
         }
         resultsAdapter.tracks = tracks
         resultsRecyclerView.layoutManager = LinearLayoutManager(this)
@@ -157,21 +168,19 @@ class SearchActivity : AppCompatActivity() {
             if (hasFocus) showHistoryOrHide()
         }
 
-        searchEditText.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                searchRequest()
-                true
-            }
-            false
-        }
-
         val simpleTextWatcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 currentSearchQuery = s.toString()
+                searchHandler.removeCallbacks(searchRunnable)
                 clearIcon.visibility = if (s.isNullOrEmpty()) View.GONE else View.VISIBLE
                 if (s.isNullOrEmpty() && searchEditText.hasFocus()) {
+                    progressBar.visibility = View.GONE
+                    tracks.clear()
+                    resultsAdapter.notifyDataSetChanged()
                     showHistoryOrHide()
+                } else if (!s.isNullOrBlank()) {
+                    searchHandler.postDelayed(searchRunnable, SEARCH_DEBOUNCE_DELAY_MILLIS)
                 }
             }
             override fun afterTextChanged(s: Editable?) {}
@@ -183,9 +192,11 @@ class SearchActivity : AppCompatActivity() {
         if (searchEditText.text.isNotEmpty()) {
             lastSearchQuery = searchEditText.text.toString()
             showState(SearchState.LOADING)
+            progressBar.visibility = View.VISIBLE
 
             itunesService.search(lastSearchQuery).enqueue(object : Callback<TracksResponse> {
                 override fun onResponse(call: Call<TracksResponse>, response: Response<TracksResponse>) {
+                    progressBar.visibility = View.GONE
                     if (response.isSuccessful) {
                         val responseBody = response.body()
                         if (responseBody != null && responseBody.results.isNotEmpty()) {
@@ -201,6 +212,7 @@ class SearchActivity : AppCompatActivity() {
                 }
 
                 override fun onFailure(call: Call<TracksResponse>, t: Throwable) {
+                    progressBar.visibility = View.GONE
                     showState(SearchState.ERROR)
                 }
             })
@@ -247,7 +259,24 @@ class SearchActivity : AppCompatActivity() {
         inputMethodManager?.hideSoftInputFromWindow(view.windowToken, 0)
     }
 
+    private fun clickDebounce(): Boolean {
+        val current = isClickAllowed
+        if (isClickAllowed) {
+            isClickAllowed = false
+            clickHandler.postDelayed(clickRunnable, CLICK_DEBOUNCE_DELAY_MILLIS)
+        }
+        return current
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        searchHandler.removeCallbacks(searchRunnable)
+        clickHandler.removeCallbacks(clickRunnable)
+    }
+
     companion object {
         private const val SEARCH_QUERY = "SEARCH_QUERY"
+        private const val SEARCH_DEBOUNCE_DELAY_MILLIS = 2000L
+        private const val CLICK_DEBOUNCE_DELAY_MILLIS = 1000L
     }
 }
